@@ -1,0 +1,15 @@
+{
+  "name": "go-convention",
+  "owner": {
+    "name": "NaoyaNakamori"
+  },
+  "description": "Go 1.27 の実装とテストの規約を配布する単一package marketplace",
+  "plugins": [
+    {
+      "name": "go-convention",
+      "source": "./plugins/go-convention",
+      "description": "コーディング・ドメインモデル・永続化・usecase・handler・エラー・ログ・テストの13の独立した規約入口を提供する",
+      "version": "1.0.0"
+    }
+  ]
+}

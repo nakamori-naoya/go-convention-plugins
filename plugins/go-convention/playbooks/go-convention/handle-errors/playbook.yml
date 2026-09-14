@@ -1,0 +1,9 @@
+version: 2
+name: handle-errors
+description: エラーの作り方・包み方・翻訳を規約に合わせる。同名の内部skillへ1工程でルーティングする独立プレイブック
+instructions:
+  execution:
+    directive: 対応する内部skillだけを実行し、他の関心の規約を暗黙に適用しない
+requires: []
+steps:
+  - {id: apply, skill: handle-errors, purpose: エラーの作り方・包み方・翻訳を規約に合わせる, needs: [request], provides: [result]}
