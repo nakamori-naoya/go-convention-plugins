@@ -1,0 +1,9 @@
+version: 2
+name: implement-repository
+description: 集約の永続化ポートを sqlc + pgx で実装する（通常型・イベント型）。同名の内部skillへ1工程でルーティングする独立プレイブック
+instructions:
+  execution:
+    directive: 対応する内部skillだけを実行し、他の関心の規約を暗黙に適用しない
+requires: []
+steps:
+  - {id: apply, skill: implement-repository, purpose: 集約の永続化ポートを sqlc + pgx で実装する（通常型・イベント型）, needs: [request], provides: [result]}

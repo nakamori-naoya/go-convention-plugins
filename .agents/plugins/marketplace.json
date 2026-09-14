@@ -1,0 +1,21 @@
+{
+  "name": "go-convention",
+  "interface": {
+    "displayName": "Go Convention"
+  },
+  "plugins": [
+    {
+      "name": "go-convention",
+      "source": {
+        "source": "local",
+        "path": "./plugins/go-convention"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools",
+      "version": "1.0.0"
+    }
+  ]
+}

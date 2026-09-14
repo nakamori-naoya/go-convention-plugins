@@ -1,0 +1,9 @@
+version: 2
+name: write-go-code
+description: Go 1.27 のコーディング規約で書く・直す。同名の内部skillへ1工程でルーティングする独立プレイブック
+instructions:
+  execution:
+    directive: 対応する内部skillだけを実行し、他の関心の規約を暗黙に適用しない
+requires: []
+steps:
+  - {id: apply, skill: write-go-code, purpose: Go 1.27 のコーディング規約で書く・直す, needs: [request], provides: [result]}

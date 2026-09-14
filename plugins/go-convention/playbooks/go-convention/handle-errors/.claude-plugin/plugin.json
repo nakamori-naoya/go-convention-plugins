@@ -1,0 +1,11 @@
+{
+  "name": "handle-errors",
+  "version": "1.0.0",
+  "description": "エラーの作り方・包み方・翻訳を規約に合わせる",
+  "skills": "./",
+  "metadata": {
+    "harness": {
+      "contractVersion": 1
+    }
+  }
+}

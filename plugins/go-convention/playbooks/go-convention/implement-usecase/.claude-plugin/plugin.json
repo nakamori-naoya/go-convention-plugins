@@ -1,0 +1,11 @@
+{
+  "name": "implement-usecase",
+  "version": "1.0.0",
+  "description": "command / query の usecase を実装する",
+  "skills": "./",
+  "metadata": {
+    "harness": {
+      "contractVersion": 1
+    }
+  }
+}

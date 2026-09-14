@@ -1,0 +1,9 @@
+version: 2
+name: implement-usecase
+description: command / query の usecase を実装する。同名の内部skillへ1工程でルーティングする独立プレイブック
+instructions:
+  execution:
+    directive: 対応する内部skillだけを実行し、他の関心の規約を暗黙に適用しない
+requires: []
+steps:
+  - {id: apply, skill: implement-usecase, purpose: command / query の usecase を実装する, needs: [request], provides: [result]}
