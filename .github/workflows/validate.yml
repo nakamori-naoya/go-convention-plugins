@@ -1,0 +1,49 @@
+name: Functional validation
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: validate (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      # この repository の validate.sh は自 repo 内で完結する（兄弟 repository の checkout は要らない）。
+      # workspace root の validate-plugin-repository.py は git 管理外なので、CI では root 契約が SKIP になる。
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: tests/examples/go.mod
+          cache-dependency-path: tests/examples/go.sum
+      - name: Install CLI requirements
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo apt-get update
+            sudo apt-get install -y jq ripgrep
+          else
+            brew list jq >/dev/null 2>&1 || brew install jq
+            brew list ripgrep >/dev/null 2>&1 || brew install ripgrep
+          fi
+      - name: Validate distribution contract, check-cases.py fixtures and Go examples
+        shell: bash
+        run: bash scripts/validate.sh
