@@ -1,5 +1,5 @@
 ---
-name: apply-go-package-layout
+name: go-convention-internal-apply-go-package-layout
 description: 確定済みの論理責務、集約境界、Command・Query区分を、Go 1.27のpackage treeとimport方向へ写し、配置違反を修正する。「Goのpackageをどう切るか」「この責務をどこへ置くか」「import cycleを避けてCQRSを配置して」と言われ、論理的な所有者が既に決まっているときに使う。
 ---
 
@@ -140,4 +140,3 @@ description: 確定済みの論理責務、集約境界、Command・Query区分�
 反例: 読み取りモデルを`reservation/query`へ置き、`reservation/usecase/query`から実装packageをimportする。依存が外向きになるため拒否する。
 
 境界例: 予約確定と予約待ち登録の両方へ書くと確定した場合だけ、Commandを`orchestration/usecase/command`へ移す。片方を読むだけへ変われば予約集約側へ戻す。
-

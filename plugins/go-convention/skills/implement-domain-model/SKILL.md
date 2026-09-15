@@ -1,5 +1,5 @@
 ---
-name: implement-domain-model
+name: go-convention-internal-implement-domain-model
 description: domain-model 資料（要素一覧・各要素の詳細・状態と型の分割・ドメインイベント）を Go の値オブジェクト・エンティティ・集約・ドメインイベント・永続化ポートへ写す。値オブジェクトは非公開フィールドの struct と NewX、集約は状態ごとの型（typestate）と封じた和型、操作は遷移結果型を返す値レシーバ、拒む理由は sentinel、で書く。「この集約を Go で実装して」「ドメインモデル資料から VO と集約を書いて」「この予約の状態遷移を型にして」と言われたときに使う。業務知識の発見と資料の作成、永続化（リポジトリ・SQL・marshaller）、usecase の手順、RPC の入口、テストの作成、エラーの翻訳とログは対象外として、それぞれの規約へ返す。
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: implement-usecase
+name: go-convention-internal-implement-usecase
 description: Go の usecase 層を、command（入力の解決 → tx を張る → 復元または生成 → 絞り込み → 操作 → 保存）と query（読み取りポートを呼んで DTO を返す）の 2 つの形で書く。tx は command の usecase が `tx.Manager.Run` で張り（query は張らない）、ポートはドメインの `Repository` interface と usecase 側の読み取りポートに依存し、ID は usecase が `IDGenerator` で用意し時刻は Input の `At` で受けて集約へ渡し、複数集約の協調（同じ tx か、ドメインイベントを受けた別 usecase か）を資料に従って決める。「この usecase を書いて」「業務イベントをアプリケーション層に落として」「tx の張り方を直して」「集約を 2 つ触る手順を書いて」と言われたときに使う。業務ルールの実装（集約・VO）、SQL とリポジトリの中身、読み取りモデルの SQL、RPC の入口と DTO 変換、エラーの翻訳表、ログの出力、テストは対象外として、それぞれの規約へ返す。
 ---
 

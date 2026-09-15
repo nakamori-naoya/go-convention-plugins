@@ -1,5 +1,5 @@
 ---
-name: test-domain-model
+name: go-convention-internal-test-domain-model
 description: 集約・エンティティ・値オブジェクトのテストを、domain-model 資料の「BDDとの対応」表から書く。資料の BDD をその表の要素×操作が指すテスト関数（生成関数・状態型のメソッド・絞り込み関数・値オブジェクトの操作）へ割り振り、Given を Restore* / New* の引数、Then を Next の値・発したイベントの値・sentinel で書き、テストしない BDD はファイル末尾に理由付きで列挙する。「この集約のテストを書いて」「domain-model 資料の BDD からドメインのテストを書いて」「この値オブジェクトの境界をテストして」と言われたときに使う。テストの形の共通規則そのもの、永続化（復元の往復・DB 制約・同時実行）、usecase の手順、RPC の入口は対象外として、それぞれの規約へ返す。
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: write-logs
+name: go-convention-internal-write-logs
 description: Go のログを `log/slog` で、最外境界（Connect の interceptor・worker の supervisor・外部受信境界）が 1 回だけ出す形に書く・直す。出す層と出さない層、二重ログ禁止、途中ログの許可基準、レベル表、属性語彙、値オブジェクトの秘匿を定める。「ログを出して」「このログを規約に合わせて」「どこでログを出すべきか」「interceptor でログを拾いたい」と言われたときに使う。エラーの分類と翻訳表の中身、監査記録の永続化、メトリクス・トレースの設計は対象外として、それぞれの規約へ返す。
 ---
 
