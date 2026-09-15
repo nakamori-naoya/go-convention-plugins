@@ -1,18 +1,19 @@
 # go-convention
 
-**Go 1.27 の実装とテストの規約を、関心ごとに分けた 13 の入口から適用します。** 各入口は同名の内部 skill（`skills/<name>/SKILL.md`）へルーティングするだけで、規約の正本は内部 skill にあります。
+**Go 1.27 の実装とテストの規約を、関心ごとに分けた 14 の入口から適用します。** 各入口は同名の内部 skill（`skills/<name>/SKILL.md`）へルーティングするだけで、規約の正本は内部 skill にあります。
 
 ## これは何か／何ではないか
 
 これは、Go でドメイン駆動設計の層（ドメインモデル・永続化・usecase・handler）と横断的関心事（エラー・ログ）とテストを、同じ前提（typestate の集約、完全コンストラクタの値オブジェクト、sqlc + pgx、Connect-RPC、古典派のテスト、BDD 資料の ID をそのまま使うテスト）で書くための規約です。
 
-これは、層とは何か・CQRS のディレクトリ構成・開発プロセス（内側から外へ、BDD 通過ゲート、ATDD）を決めるものではありません。それらは言語非依存の開発規約が決めます。
+これは、層とは何か・開発プロセス（内側から外へ、BDD 通過ゲート、ATDD）を決めるものではありません。確定済みの論理責務と集約境界を受け取り、Go 固有の package 配置へ写すところからを扱います。
 
 ## 入口
 
 | 入口 | 何をするか |
 |---|---|
 | `write-go-code` | Go 1.27 のコーディング規約で書く・直す |
+| `apply-go-package-layout` | 確定済みの論理責務を Go の package 配置と import 方向へ写す |
 | `implement-domain-model` | domain-model 資料から値オブジェクト・エンティティ・集約を実装する |
 | `implement-repository` | 集約の永続化ポートを sqlc + pgx で実装する（通常型・イベント型） |
 | `implement-query-service` | CQRS の読み取り側を sqlc で実装する |

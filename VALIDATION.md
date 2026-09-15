@@ -14,7 +14,7 @@ bash scripts/validate.sh
 
 workspace root の `scripts/validate-plugin-repository.py` で、package 境界の契約（公開・インストール対象が playbook package 1 件であること、manifest の `metadata.harness.playbooks` / `internalPlugins` の宣言、Codex / Claude manifest の同一性、内部 skill の自己完結＝`skills/**/*.md` に兄弟 skill 名と「playbook」「プレイブック」が現れないこと）を確認します。workspace root が無い環境では「省略」と表示します。
 
-続けて、両 marketplace の identity（名前・version・source）が manifest と一致すること、manifest が 13 の入口と 13 の内部 skill を宣言し `skills` が入口だけであること、各入口 `playbooks/go-convention/<name>/` に `SKILL.md` / `playbook.yml` / `scripts/prepare.sh` / `scripts/resolve.sh` が在り、`prepare.sh` が成功し、`resolve.sh` が同名の内部 skill を返し、`playbook.yml` が同名の内部 skill へ 1 工程で振り、`skills/<name>/SKILL.md` が在ることを確認します。入口と内部 skill の directory がそれぞれ 13 であることも確認します。
+続けて、両 marketplace の identity（名前・version・source）が manifest と一致すること、manifest が 14 の入口と 14 の内部 skill を宣言し `skills` が入口だけであること、各入口 `playbooks/go-convention/<name>/` に `SKILL.md` / `playbook.yml` / `scripts/prepare.sh` / `scripts/resolve.sh` が在り、`prepare.sh` が成功し、`resolve.sh` が同名の内部 skill を返し、`playbook.yml` が同名の内部 skill へ 1 工程で振り、`skills/<name>/SKILL.md` が在ることを確認します。入口と内部 skill の directory がそれぞれ 14 であることも確認します。
 
 ## 規約の資料と例
 

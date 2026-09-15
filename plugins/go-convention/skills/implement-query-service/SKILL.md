@@ -1,66 +1,100 @@
 ---
 name: implement-query-service
-description: CQRS の読み取り側（query service）を PostgreSQL ＋ pgx/v5 ＋ sqlc で実装する。usecase 側が定義した読み取りポートを満たす型を `query` package に置き、一覧・件数・検索・ページング・ソート・フィルタ・JOIN を SQL で行い、テーブルの行を読み取りモデル（公開フィールドの DTO）へ純粋関数で写す。ドメイン（集約・VO）を経由せず、集約を復元せず、書き込まず、tx を張らない。「この一覧を実装して」「空き状況の query service を書いて」「読み取りモデルを作って」「件数とページングを付けて」と言われたときに使う。読み取りポート（interface）の設計、トランザクションを張る側の書き方、集約の永続化と復元、DTO から proto への変換、何をテストするかは対象外として、それぞれの規約へ返す。
+description: CQRSの読み取り側をPostgreSQL、pgx/v5、sqlcで実装する。ユースケース側が所有する読み取り契約を満たし、関係射影と集計はSQL、SQLに適さない確認済み業務計算は値オブジェクトまたは純関数で行う。集約・エンティティを復元・操作せず、書き込まず、txを張らない。「この一覧を実装して」「空き状況のQuery実装を書いて」と言われたときに使う。
 ---
 
 # implement-query-service
 
-これは、**読み取りポートの RDB 実装を、SQL で作った行を DTO へ写すことだけで書く規約**である。
+読み取りポートのRDB実装を、SQLによる関係射影・集計と、必要な値オブジェクトまたは純関数による業務計算から組み立てる。
 
-これは、**集約の永続化と復元を書く規約ではない**（それは永続化ポートの実装の関心で、`FindByID` と `Apply*` / `Create` / `Update` はそちらが持つ）。**読み取りポートを設計する規約でもない**（interface は usecase 側が使う分だけ切る）。**トランザクションの持ち主でもない**（usecase の規約が張り、query service は ctx の tx があればそれに乗り、無ければ pool で読む）。**proto を組み立てる場所でもない**（DTO → proto は入口の規約が持つ）。何をテストするかはテストの規約が決める。
+これは集約・エンティティの永続化、復元、操作を書く仕事ではない。読み取りポート、読み取りモデル、Page、公開sentinelを設計する仕事でもない。これらはユースケース側の確定済み契約を使う。トランザクションを開始せず、protoを組み立てず、ログを出さない。
 
-前提: Go 1.27、PostgreSQL、`github.com/jackc/pgx/v5`（`pgxpool` / `pgtype`）、`github.com/sqlc-dev/sqlc`（`sql_package: "pgx/v5"`）。入力は読み取りの要求（どの画面・API がどの項目を要るか）とデータモデル資料（テーブル定義）。例の題材は貸会議室予約 RoomFlow（module `example.com/roomflow`）で、ディレクトリ構成は上位の開発規約が決めるため、例は import path を短くするために平らにしている。
+## 入力
+
+- ユースケース側が所有する読み取りポート、読み取りモデル、Page、公開sentinel。
+- 読み取り要求と、各契約フィールドの意味。
+- テーブル、列、関係、値域が確定したデータモデル資料。
+- 再利用できる値オブジェクトまたは純関数と、その業務計算の根拠。
+- 確定済みのGo package配置。
+
+前提はGo 1.27、PostgreSQL、`github.com/jackc/pgx/v5`、`github.com/sqlc-dev/sqlc`である。
 
 ## 規約
 
-| # | 柱 | 一言で | 正本 |
-|---|---|---|---|
-| 1 | 責務 | 行 → DTO だけ。ドメイン非経由・書き込み無し・業務判断無し・tx を張らない・既定値へ丸めない | [query-service.md](references/query-service.md) §1 |
-| 2 | 置き場と依存 | 読み取りポートは usecase が定義し、`query` package の型が満たす。`query` は `reservation`・`rdb` を import せず、`rdb/sqlcgen` と `tx` だけ共有 | [query-service.md](references/query-service.md) §2 |
-| 3 | 接続と sqlc | ctx に tx があればそれ、無ければ pool。SQL は `rdb/query/{name}_read.sql` に SELECT だけ、`:many` / `:one`、列は明示 | [query-service.md](references/query-service.md) §3–§5 |
-| 4 | ページング・件数・フィルタ | すべて SQL。`limit` は 1 以上 `MaxPageLimit` 以下で範囲外は error、件数は別 query・別メソッド、親子の一覧は親に `LIMIT` | [query-service.md](references/query-service.md) §6–§7 |
-| 5 | DTO と行 → DTO | 公開フィールドの struct、業務語、`time.Time`（UTC）、NULL は値と有無の対、空は nil、`{Row}To{DTO}` の純粋関数、複数行 → 1 DTO は `seen` で畳む | [dto.md](references/dto.md) |
-| 6 | command と worker の材料 | 仮押さえの command が読む「重なる有効な予約の利用枠」（`ActiveSlot`。半開区間の条件を SQL に書く）と「無断不利用の時刻」（`[]time.Time`）、常駐 worker が読む「期限到来の仮押さえの予約番号」（`[]string`）も同じ形。判定（重なり・資格・期限の到来）と資料の数（30 日・3 回）は書かない | [query-service.md](references/query-service.md) §8 |
+| 柱 | 規則 | 詳細 |
+|---|---|---|
+| 責務 | 関係射影・集計はSQL、SQLに適さない確認済み業務計算は値オブジェクトまたは純関数 | [Query実装とは何か](references/query-service.md) |
+| 契約 | 読み取り契約はusecase側が所有し、実装から契約へ依存する | [Query実装とは何か](references/query-service.md) §2 |
+| 接続 | ctxにtxがあれば乗り、無ければpool。開始・commit・rollbackしない | [Query実装とは何か](references/query-service.md) §3 |
+| 変換 | DB行と計算結果をusecase側の読み取りモデルへ写す | [行から読み取りモデルへの変換](references/dto.md) |
+| 禁止 | 集約・エンティティの復元・操作、書き込み、公開契約型の再定義 | [Query実装とは何か](references/query-service.md) §1 |
 
-## 手順
+値オブジェクトまたは純関数の再利用と、集約の利用を混同しない。金額丸めや営業時間など、SQLに不向きで同じ業務定義を必要とする計算は確認済みのドメイン計算を借りる。件数、合計、最大・最小、JOIN、絞り込み、並び順はSQLで行う。値オブジェクトを避ける目的で計算済み列を保存しない。
 
-1. **DTO を決める。** 読み取りの要求から、返す項目を業務語の公開フィールドに並べ、各フィールドの出所をデータモデル資料の列（または SQL の集計）に対応させる。NULL 許可列は値と有無の対、親子はスライスにする。完了条件: 全フィールドに出所の列（または集計式）が 1 つ書けていて、ドメインの型・`pgtype`・proto がフィールドに無い
-2. **SQL を書き、生成する。** `rdb/query/{name}_read.sql` に `{List|Get|Count}{何}` の SELECT を書く。JOIN・`WHERE`・`ORDER BY`（末尾に主キー）・`LIMIT` / `OFFSET`・`count(*)` をここに置き、`sqlc generate` で `rdb/sqlcgen` を更新する。完了条件: 生成が通り、行型の列が DTO のフィールドと 1:1 で対応している（余る列も足りない列も無い）
-3. **行 → DTO を書く。** `query/{name}_marshaller.go` に `{Row}To{DTO}` の純粋関数を書く。NULL 列は `(T, bool)` を返す関数で写し、時刻は `.UTC()`、sqlc の幅は DTO の型へ変換、複数行 → 1 DTO は `seen` で畳む。完了条件: 関数が引数以外を読まず、error を返さず、DTO に `pgtype` が無い
-4. **query 型とメソッドを書く。** `*pgxpool.Pool` を持つ struct と `New{Name}Query(pool)`。各メソッドは、引数の形の検査 → `queries(ctx, q.pool)` → 生成メソッド 1 回 → 行 → DTO → 返す、の順で書き、`:one` の `pgx.ErrNoRows` は `query.ErrNotFound` に翻訳し、文脈を 1 回足す。完了条件: メソッドに SQL 文・`reservation` / `rdb` の import・`Begin` / `Commit`・引数検査以外の分岐・`log/slog` が無い
-5. **ポートと突き合わせる。** usecase 側の読み取りポート interface とメソッドのシグネチャ（引数・返り値の DTO）が一致することを確かめる。ポートが無ければ、この skill の DTO とメソッドをポートの案として報告に載せ、usecase の規約へ渡す。完了条件: `go build ./...` が通り、DI の組み立てで代入できる
-6. **コンパイルを通す。** `go build ./... && go vet ./...`。完了条件: 両方が通る
-7. **報告する。** 「報告」の項目を返す
+## 作業手順
+
+### 1. 契約と導出根拠を確認する
+
+各フィールドを、DB列、SQLの関係射影・集計、確認済みの値オブジェクト・純関数のいずれかへ対応させる。Query実装側では型、Page、sentinelを再定義しない。
+
+成功判定: 全フィールドの根拠と計算場所が一意で、集約・エンティティを必要としない。
+
+### 2. SQLを書く
+
+SELECTする列を明示し、JOIN、`WHERE`、`ORDER BY`、`LIMIT`、`OFFSET`、`count(*)`など関係集合で完結する処理を置く。SQLを生成し、各取得列が直接射影または確認済み業務計算の入力として使われることを確かめる。行と契約フィールドの一対一対応は要求しない。
+
+成功判定: SELECT以外がなく、不要列がなく、関係集計をGoでやり直していない。
+
+### 3. 読み取りモデルを組み立てる
+
+DB行をprimitiveへ写し、SQLに適さない業務計算だけを既存の値オブジェクトまたは純関数へ渡す。NULLは値と`Has{X}`の対、時刻はUTC、0件はnil sliceとする。親子の行は識別子で畳む。
+
+成功判定: 変換が引数以外を読まず、集約・エンティティを復元せず、返り値がusecase側の契約型である。
+
+### 4. Query型を実装する
+
+接続poolを持つ型を作り、引数の形の検査、txまたはpoolの選択、生成メソッド1回、読み取りモデルへの変換、返却の順で書く。`:one`の0行は契約の`ErrNotFound`へ翻訳する。
+
+成功判定: SQL文、集約操作、tx開始、ログがメソッドにない。
+
+### 5. 契約と検証する
+
+読み取りポートの引数・返り値と実装を突き合わせ、`go build ./...`と`go vet ./...`を実行する。
+
+成功判定: 実装が契約interfaceを満たし、Query実装からusecase側契約へ依存している。
 
 ## 停止条件
 
-- DTO の項目が、テーブルの列からも SQL の集計からも導けず、集約の操作や VO の判定（重なり・資格・期限の到来）を呼ばないと決まらない → 書かない。値を書き込み時に確定して列に持つかをデータモデル資料へ返す
-- 集約（`reservation.Reservation`）を返す一覧、または一覧の結果を `Restore*` で復元することを求められた → 書かない。集約の取得は永続化ポートの `FindByID` の関心で、一覧で集約を返す interface は作らない
-- 読み取りの途中で書く必要が出た（閲覧記録・最終アクセス日時・キャッシュの更新） → 書かない。書き込みは command の関心で、usecase の規約へ返す
-- 未指定の `limit` / ソート列 / 日付を既定値で埋めることを求められた → 丸めない。呼び手（usecase）が明示する
-- 呼び手からソート列や任意の条件式を受け取って SQL を組み立てることを求められた → 組み立てない。条件の組ごとに query を分ける
-- データモデル資料が無い、または DTO に要る列が資料のどのテーブルにも無い → 資料の作成・改訂へ返す
-- 引数に VO（`reservation.RoomCode`）を受け取ることを求められた → 受け取らない。ポートの引数は `string` / `time.Time` / `Page` で、VO から値を取り出すのは usecase
+- 読み取りポート、読み取りモデル、Page、必要なsentinelがusecase側で確定していない。
+- 必要な契約フィールドをDB列、SQLの関係計算、確認済みの値オブジェクト・純関数のどれからも導けず、新しい業務規則を発明する必要がある。
+- 集約・エンティティの復元または操作が必要とされる。
+- 読み取り途中の書き込み、暗黙の既定値、エラー時の別ソースへのフォールバックが求められる。
+- 呼び手から任意のSQL条件やソート列を受け取る必要がある。
 
-## チェックリスト
+保存列が直接存在しないことだけでは停止しない。確認済みのSQLまたは純粋なドメイン計算で導けるなら、その根拠を記録して進む。逆に、値オブジェクトを避けるためだけの非正規化を提案しない。
 
-- [ ] `reservation`（ドメイン）と `rdb`（永続化）を import していない。`New*` / `Restore*` / リポジトリのメソッドを呼んでいない
-- [ ] SQL は `rdb/query/{name}_read.sql` だけにあり、SELECT のみ（INSERT / UPDATE / DELETE / `FOR UPDATE` が無い）。列を明示している
-- [ ] フィルタ・ソート・`LIMIT` / `OFFSET`・`count(*)` が SQL にあり、Go 側で並べ替え・絞り込み・数え上げをしていない
-- [ ] `limit` の範囲外と `offset` の負が error。既定値へ丸めていない。日付の時刻部分を切り捨てていない。`time.Now()` を呼んでいない
-- [ ] `queries(ctx, pool)` で tx があればそれ、無ければ pool。`Begin` / `Commit` / `Rollback` を呼んでいない。`Queries` を struct に持っていない
-- [ ] 行 → DTO が `{Row}To{DTO}` の純粋関数で、NULL 列は `(T, bool)` → 値と有無の対、時刻は `.UTC()`、0 件は nil、sqlc の幅は DTO の型へ変換
-- [ ] DTO は公開フィールドの struct でメソッドが無く、業務語の名前で、`pgtype` / proto / ドメインの型 / ポインタが無い
-- [ ] `:one` の `pgx.ErrNoRows` を `query.ErrNotFound` に翻訳している。文脈は 1 メソッド 1 回で、文言に SQL 文・テーブル名が無い。`log/slog` を import していない
-- [ ] 生成メソッドは 1 メソッド 1 回。件数は別メソッド。親子の一覧は親に `LIMIT` を掛けてから JOIN
-- [ ] usecase 側の読み取りポートのシグネチャと一致している
+## 完了条件
+
+- 全公開契約型、Page、sentinelがusecase側にあり、実装側に重複定義がない。
+- 実装の返り値とerrorが契約packageの型を使う。
+- 関係計算はSQL、SQLに不向きな確認済み業務計算は値オブジェクトまたは純関数に一意に置かれる。
+- 集約・エンティティを復元・操作せず、書き込まず、txを開始していない。
+- buildとvetが通る。
 
 ## 報告
 
-- query 型と実装したメソッド（シグネチャ）、対応する usecase 側のポート（無ければポートの案）
-- SQL ファイルのパスと query 名、各 query の注釈（`:many` / `:one`）と、JOIN したテーブル
-- DTO の一覧と、各フィールドの出所（テーブルの列または集計式）。値と有無の対にしたフィールド
-- 行 → DTO 関数の一覧（名前と方向）と、`seen` で畳んだ親子
-- 引数の検査と対応する sentinel、`ErrNotFound` に翻訳したメソッド
-- 仮定したこと（資料に無い列・物理型・語彙）と、資料と食い違った点
-- 停止条件で返した論点
+- 実装したQuery型とメソッド、満たした読み取りポート。
+- SQL名、読む表、JOIN、フィルタ、並び順、集計。
+- 各契約フィールドの出所と、値オブジェクト・純関数を使った計算。
+- DB行から契約型への変換、NULL・UTC・親子の扱い。
+- 実行したbuild、vetと結果、停止した論点。
+
+## 使用例
+
+典型例: 予約履歴は親予約へページングしてイベントをJOINし、DB行を`querycontract.ReservationHistory`へ写す。Pageとsentinelはusecase側の契約を使う。
+
+似て非なる例: 税込金額の丸めがSQLに不向きなら、行のprimitiveから確認済みの金額値オブジェクトまたは純関数を呼び、結果を読み取りモデルへ写す。集約は復元しない。
+
+反例: 値オブジェクトをimportしないために計算済み金額列を追加する。別の要求と整合性根拠がない非正規化なので採用しない。
+
+境界例: 一覧の件数は関係集合の計算なのでSQLで行う。集約の状態遷移にしか存在しない判断を一覧へ求められたら、集約を復元せず、読み取り要求またはドメイン計算の確定へ戻して停止する。

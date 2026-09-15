@@ -151,11 +151,11 @@ func holdOutputToResponse(out usecase.HoldReservationOutput) *roomflowv1.HoldRes
 }
 ```
 
-読み取り RPC の応答は query service の DTO から写す。DTO は primitive だけを持つので、同じ形になる（`RoomAvailability{RoomCode string; Slots []AvailableSlot}` を `roomAvailabilityToProto(a query.RoomAvailability) *roomflowv1.RoomAvailability` で。スライスは `make([]*T, 0, len(...))` で長さを決めて `append`）。
+読み取り RPC の応答はユースケース側が所有する読み取りモデルから写す。読み取りモデルは primitive だけを持つので、同じ形になる（`RoomAvailability{RoomCode string; Slots []AvailableSlot}` を `roomAvailabilityToProto(a query.RoomAvailability) *roomflowv1.RoomAvailability` で。スライスは `make([]*T, 0, len(...))` で長さを決めて `append`）。
 
 | 規則 | 理由 |
 |---|---|
-| 応答に写すのは usecase の出力型か query service の DTO。集約・値オブジェクトを引数に取る変換関数を書かない | proto の型と ドメインの型を同じ関数に置くと、handler がドメインの getter を知り、ドメインの変更が handler に波及する |
+| 応答に写すのは usecase の出力型またはusecaseが所有する読み取りモデル。集約・値オブジェクトを引数に取る変換関数を書かない | proto の型と ドメインの型を同じ関数に置くと、handler がドメインの getter を知り、ドメインの変更が handler に波及する |
 | 時刻は `timestamppb.New(t)`。`t` は UTC のまま渡す | `timestamppb` は時刻の絶対値を持つ。地域の時刻に直すのは表示側 |
 | 空のスライスは `nil` でなく長さ 0 で作る | proto の `repeated` は nil と空を区別しないが、Go 側の等値比較（テスト）で差が出る |
 | 応答が空の RPC（`ConfirmReservation`）は `&roomflowv1.ConfirmReservationResponse{}` を直接書く | 空を返す変換関数を置く理由が無い |

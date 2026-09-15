@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Scenario: go-conventionがplaybook packageとして配布でき、13の入口が内部skillへ対応し、テストの形の例がコンパイルして通る
-# Given: 両runtimeのmarketplaceと同一のmanifest、13の公開入口（playbooks/go-convention/<name>）、13の内部skill（skills/<name>）、
+# Scenario: go-conventionがplaybook packageとして配布でき、14の入口が内部skillへ対応し、テストの形の例がコンパイルして通る
+# Given: 両runtimeのmarketplaceと同一のmanifest、14の公開入口（playbooks/go-convention/<name>）、14の内部skill（skills/<name>）、
 #        各skillのreference、check-cases.py、tests/examplesのGoモジュールがある
 # When: root契約（package境界・内部skillの自己完結）、identity、入口と内部skillの対応、reference到達性、例と断片の一致、
 #       check-cases.pyの正常系・正例・負例、shell構文、goのgofmt・vet・shuffleテストを実行する
@@ -39,8 +39,8 @@ else
 fi
 
 if cmp -s "$PLUGIN/.claude-plugin/plugin.json" "$PLUGIN/.codex-plugin/plugin.json" \
-  && jq -e '.name=="go-convention" and .metadata.harness.installationSurface=="playbook-package" and (.metadata.harness.playbooks|length)==13 and (.metadata.harness.internalPlugins|length)==13 and (.skills|length)==13' "$PLUGIN/.claude-plugin/plugin.json" >/dev/null; then
-  pass "runtime manifestが同一で、13の入口と13の内部skillを宣言"
+  && jq -e '.name=="go-convention" and .metadata.harness.installationSurface=="playbook-package" and (.metadata.harness.playbooks|length)==14 and (.metadata.harness.internalPlugins|length)==14 and (.skills|length)==14' "$PLUGIN/.claude-plugin/plugin.json" >/dev/null; then
+  pass "runtime manifestが同一で、14の入口と14の内部skillを宣言"
 else
   fail "runtime manifestの同一性または入口の宣言"
 fi
@@ -57,9 +57,9 @@ while IFS= read -r name; do
   [ -f "$entry/playbook.yml" ] && { rg -q "^  - \{id: apply, skill: $name," "$entry/playbook.yml" || { echo "playbook.ymlが同名の内部skillへ1工程で振らない: $name"; entry_failed=1; }; }
   jq -e --arg n "$name" '.metadata.harness.internalPlugins[$n]=="./skills/"+$n and .metadata.harness.playbooks[$n]=="./playbooks/go-convention/"+$n' "$PLUGIN/.claude-plugin/plugin.json" >/dev/null || { echo "manifestの宣言とdirectoryが対応しない: $name"; entry_failed=1; }
 done < <(jq -r '.metadata.harness.playbooks|keys[]' "$PLUGIN/.claude-plugin/plugin.json")
-[ "$(find "$PLUGIN/playbooks/go-convention" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = "13" ] || { echo "入口のdirectoryが13でない"; entry_failed=1; }
-[ "$(find "$PLUGIN/skills" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = "13" ] || { echo "内部skillのdirectoryが13でない"; entry_failed=1; }
-[ "$entry_failed" -eq 0 ] && pass "13の入口が同名の内部skillへ対応（prepare/resolve/playbook.yml/manifest）" || fail "入口と内部skillの対応"
+[ "$(find "$PLUGIN/playbooks/go-convention" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = "14" ] || { echo "入口のdirectoryが14でない"; entry_failed=1; }
+[ "$(find "$PLUGIN/skills" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = "14" ] || { echo "内部skillのdirectoryが14でない"; entry_failed=1; }
+[ "$entry_failed" -eq 0 ] && pass "14の入口が同名の内部skillへ対応（prepare/resolve/playbook.yml/manifest）" || fail "入口と内部skillの対応"
 
 # 全内部skill: SKILL.md から references を全部直接リンクし、reference 間のリンク先が在る
 if python3 - "$PLUGIN/skills" <<'PY2'
@@ -90,6 +90,21 @@ then
   pass "全内部skillのreferenceが入口から直接到達し、reference間のリンク先が在る"
 else
   fail "reference到達性"
+fi
+
+if python3 "$ROOT/scripts/check-query-dependency.py" "$ROOT" --self-test >"$TMP_ROOT/query-direction.out" 2>&1; then
+  pass "Query契約はusecase側が所有し、実装から契約へ依存"
+else
+  cat "$TMP_ROOT/query-direction.out"
+  fail "Query契約の所有と依存方向"
+fi
+
+cp -R "$ROOT" "$TMP_ROOT/query-negative"
+printf '\nimport "example.com/roomflow/query"\n' >>"$TMP_ROOT/query-negative/plugins/go-convention/skills/implement-usecase/references/query.md"
+if python3 "$ROOT/scripts/check-query-dependency.py" "$TMP_ROOT/query-negative" >"$TMP_ROOT/query-negative.out" 2>&1; then
+  fail "Query依存方向の負例を拒否"
+else
+  pass "Query依存方向の負例を拒否"
 fi
 
 if python3 - "$SKILL/references/examples.md" "$EXAMPLES" <<'PY'

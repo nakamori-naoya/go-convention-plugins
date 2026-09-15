@@ -58,7 +58,7 @@ description: Connect-RPC（connectrpc.com/connect ＋ protobuf）の入口を Go
 - 要求に無い値を「未指定なら既定値」で埋めるよう求められた（時刻・件数・列挙の `_UNSPECIFIED`） → 書かない。既定へ倒す前に利用者の許可を得る。許可があれば、既定を使ったことを応答で分かる形にする
 - 認証の方式（トークンの形・検証先）が決まっていない → `Verifier` interface までを書き、実装は止まる。方式は上位の規約が決める
 - server 実装からリポジトリ・query service・`tx.Manager` を直接呼ぶよう求められた → 書かない。usecase の読み取りポートか command を通す形を提案して止まる
-- 応答にドメインの型をそのまま載せたい（`reservation.Reservation` を返す） → 書かない。usecase の出力型か query service の DTO を経由する形を提案して止まる
+- 応答にドメインの型をそのまま載せたい（`reservation.Reservation` を返す） → 書かない。usecase の出力型またはusecase側が所有する読み取りモデルを経由する形を提案して止まる
 
 ## チェックリスト（機械で言えないことだけ）
 

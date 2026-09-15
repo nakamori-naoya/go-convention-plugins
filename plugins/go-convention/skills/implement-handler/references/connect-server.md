@@ -196,7 +196,7 @@ func callerFrom(ctx context.Context) (string, error) {
 
 ## 4. 読み取り RPC
 
-一覧・空き状況などの読み取り RPC も同じ形で、呼ぶのが usecase の読み取り（query service の DTO を返すもの）になるだけである。handler が query service を直接呼ばない（依存は usecase 経由で 1 方向に保つ）。応答への変換は DTO の primitive を proto へ写す関数 `{DTO}ToProto` で、[dto-mapping.md](dto-mapping.md) §3 の形。集約（`reservation.Reservation`）を応答に写す関数は書かない。集約が応答に要るなら、usecase が出力型（primitive の struct）へ写してから返す。
+一覧・空き状況などの読み取り RPC も同じ形で、呼ぶのがusecase側の読み取りモデルを返すQueryユースケースになるだけである。handler が query service を直接呼ばない（依存は usecase 経由で 1 方向に保つ）。応答への変換は読み取りモデルの primitive を proto へ写す関数 `{DTO}ToProto` で、[dto-mapping.md](dto-mapping.md) §3 の形。集約（`reservation.Reservation`）を応答に写す関数は書かない。集約が応答に要るなら、usecase が出力型（primitive の struct）へ写してから返す。
 
 ## 5. 置き場
 
