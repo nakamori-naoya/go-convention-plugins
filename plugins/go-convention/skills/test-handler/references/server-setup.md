@@ -19,7 +19,7 @@ import (
 
 	"example.com/roomflow/gen/roomflowv1/roomflowv1connect"
 	"example.com/roomflow/idgen"
-	"example.com/roomflow/query"
+	query "example.com/roomflow/reservation/query"
 	"example.com/roomflow/rdb"
 	"example.com/roomflow/tx"
 	"example.com/roomflow/usecase"

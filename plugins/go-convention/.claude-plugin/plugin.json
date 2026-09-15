@@ -7,6 +7,7 @@
   },
   "skills": [
     "./playbooks/go-convention/write-go-code",
+    "./playbooks/go-convention/apply-go-package-layout",
     "./playbooks/go-convention/implement-domain-model",
     "./playbooks/go-convention/implement-repository",
     "./playbooks/go-convention/implement-query-service",
@@ -41,6 +42,7 @@
       "marketplace": "go-convention",
       "playbooks": {
         "write-go-code": "./playbooks/go-convention/write-go-code",
+        "apply-go-package-layout": "./playbooks/go-convention/apply-go-package-layout",
         "implement-domain-model": "./playbooks/go-convention/implement-domain-model",
         "implement-repository": "./playbooks/go-convention/implement-repository",
         "implement-query-service": "./playbooks/go-convention/implement-query-service",
@@ -56,6 +58,7 @@
       },
       "internalPlugins": {
         "write-go-code": "./skills/write-go-code",
+        "apply-go-package-layout": "./skills/apply-go-package-layout",
         "implement-domain-model": "./skills/implement-domain-model",
         "implement-repository": "./skills/implement-repository",
         "implement-query-service": "./skills/implement-query-service",
@@ -70,6 +73,12 @@
         "test-handler": "./skills/test-handler"
       },
       "implements": [
+        {
+          "id": "go-convention/apply-go-package-layout",
+          "version": 1,
+          "kind": "playbook",
+          "playbook": "apply-go-package-layout"
+        },
         {
           "id": "go-convention/write-go-code",
           "version": 1,

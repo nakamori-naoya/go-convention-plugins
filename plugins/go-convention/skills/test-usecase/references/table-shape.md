@@ -252,7 +252,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"example.com/roomflow/query"
+	query "example.com/roomflow/reservation/query"
 	"example.com/roomflow/rdb"
 	"example.com/roomflow/rdb/rdbtest"
 	"example.com/roomflow/rdb/sqlcgen"
@@ -414,7 +414,7 @@ query usecase（一覧・件数を DTO で返す）の表は、`seed{Table}` →
 |---|---|
 | `seed{Table}` | 読まれるソースの行。ソース選択（観点 3）があるなら、選ばれる側と選ばれない側の両方に、区別できる値の行を置く |
 | `in` | `Execute` の引数名そのまま。入力解決（観点 1）があるなら、解決結果で読まれる行が変わる前提を置く |
-| `want` | query service が返す DTO の型そのまま（`query.RoomAvailability`）。usecase が DTO を組み替えないので、`want` は query service の返り値と同じ形になる |
+| `want` | usecase側が所有する読み取りモデル（`query.RoomAvailability`）。usecaseが読み取りポートの返り値を組み替えないので、`want`は契約の型と同じ形になる |
 | `wantErr` | 入力解決の sentinel。query service の error は素通し |
 
 ループ本体は `Reset` → `Seed*` → DI（`usecase.New{Usecase}(query.New{Query}(pool))`）→ `Execute` → `require.NoError` / `require.ErrorIs` → `assert.Equal(t, tt.want, got)`。SQL の正しさ（JOIN / WHERE / 並び順）は永続化層のテストが見るので、ここでは「解決した入力を渡した結果、選ばれたソースの行が DTO に現れる」ことだけを見る。

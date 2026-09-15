@@ -43,7 +43,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"example.com/roomflow/query"
+	queryimpl "example.com/roomflow/reservation/query"
+	query "example.com/roomflow/reservation/usecase/query"
 	"example.com/roomflow/rdb/rdbtest"
 	"example.com/roomflow/rdb/sqlcgen"
 )
@@ -152,7 +153,7 @@ Then: 会議室だけを持ち、占有が空の一覧が返る`,
 			rdbtest.SeedReservations(ctx, t, pool, tt.seedReservations)
 			rdbtest.SeedRoomBookingClaims(ctx, t, pool, tt.seedRoomBookingClaims)
 			rdbtest.SeedTentativeHoldDeadlines(ctx, t, pool, tt.seedTentativeHoldDeadlines)
-			q := query.NewRoomAvailabilityQuery(pool)
+			q := queryimpl.NewRoomAvailabilityQuery(pool)
 
 			got, err := q.ListForDay(ctx, tt.room, tt.day)
 			if tt.wantErr != nil {

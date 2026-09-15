@@ -1,6 +1,6 @@
 # Go Convention Plugins
 
-Go 1.27 の実装とテストの規約を関心ごとに分けて配布する、Claude Code / Codex 両対応の marketplace です。公開 package は `go-convention` 1 件で、13 の入口（[plugin README](plugins/go-convention/README.md) の表）がそれぞれ同名の内部 skill へルーティングします。規約の正本は各内部 skill の `SKILL.md` と `references/` です。
+Go 1.27 の実装とテストの規約を関心ごとに分けて配布する、Claude Code / Codex 両対応の marketplace です。公開 package は `go-convention` 1 件で、14 の入口（[plugin README](plugins/go-convention/README.md) の表）がそれぞれ同名の内部 skill へルーティングします。規約の正本は各内部 skill の `SKILL.md` と `references/` です。
 
 ## こんなときに使う
 
@@ -84,7 +84,7 @@ marketplace の取得と、インストール済みパッケージの更新は�
 
 ## 配布する plugin
 
-- `go-convention`: 13 の入口（コーディング・ドメインモデル・リポジトリ・query service・usecase・handler・エラー・ログ・テストの形・ドメインモデルのテスト・永続化層のテスト・usecase のテスト・handler のテスト）
+- `go-convention`: 14 の入口（Go package 配置・コーディング・ドメインモデル・リポジトリ・query service・usecase・handler・エラー・ログ・テストの形・ドメインモデルのテスト・永続化層のテスト・usecase のテスト・handler のテスト）
 
 利用契約は [plugin README](plugins/go-convention/README.md) を参照してください。決定の経緯は [decisions/go-convention-plugins.jsonl](decisions/go-convention-plugins.jsonl) にあります。テストの形の実例は [tests/examples/](tests/examples/) にあり、[examples.md](plugins/go-convention/skills/apply-go-test-convention/references/examples.md) と同一のコードです。
 

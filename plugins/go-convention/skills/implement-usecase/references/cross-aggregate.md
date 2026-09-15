@@ -49,7 +49,7 @@ import (
 	"fmt"
 	"time"
 
-	"example.com/roomflow/query"
+	query "example.com/roomflow/reservation/usecase/query"
 	"example.com/roomflow/reservation"
 	"example.com/roomflow/tx"
 	"example.com/roomflow/waitlist"
