@@ -88,7 +88,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"example.com/roomflow/query"
+	query "example.com/roomflow/reservation/query"
 	"example.com/roomflow/rdb"
 	"example.com/roomflow/tx"
 	"example.com/roomflow/usecase"

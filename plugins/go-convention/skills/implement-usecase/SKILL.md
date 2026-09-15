@@ -9,7 +9,7 @@ description: Go の usecase 層を、command（入力の解決 → tx を張る 
 
 これは、**業務ルールの置き場ではない**（何を許し何を拒むかは集約と VO が決め、usecase は状態を見て分岐しない）。**SQL の置き場でもない**（復元と保存はドメインの永続化ポート、一覧と件数は読み取りポートの実装が担う）。**transport を知らない**（proto も `connect` も HTTP も import せず、Input と Output は primitive の struct）。**ドメインの判断を代行しない**（型スイッチ、`Status()` の比較、件数の解釈、時刻の比較を書かず、材料を集めて集約に渡す）。エラーの分類と翻訳（エラーの規約）、ログ（ログの規約）、テスト（テストの規約）も扱わない。
 
-前提: Go 1.27、`github.com/jackc/pgx/v5`（`tx.Manager` の実装が使う。usecase は import しない）。入力はドメインの実装（集約・VO・`Repository` interface・sentinel）、domain-model 資料（「集約どうしの協働」「集約の境界」「導出されること」）、domain-rule 資料（「業務イベント」「同時に起きたとき」）。例の題材は貸会議室予約 RoomFlow（module `example.com/roomflow`）で、ディレクトリ構成は上位の開発規約が決めるため、例は import path を短くするために `reservation` / `rdb` / `query` / `tx` / `usecase` と平らにしている。
+前提: Go 1.27、`github.com/jackc/pgx/v5`（`tx.Manager` の実装が使う。usecase は import しない）。入力はドメインの実装、domain-model 資料、domain-rule 資料、確定済みの論理責務・集約境界を Go package へ写した配置である。例の題材は貸会議室予約 RoomFlow（module `example.com/roomflow`）である。
 
 ## 規約
 

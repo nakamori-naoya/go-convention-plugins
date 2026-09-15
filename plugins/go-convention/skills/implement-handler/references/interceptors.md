@@ -211,7 +211,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	"example.com/roomflow/query"
+	query "example.com/roomflow/reservation/usecase/query"
 	"example.com/roomflow/rdb"
 	"example.com/roomflow/reservation"
 )
