@@ -76,7 +76,7 @@
 
 ## 5. 完全な例
 
-題材の usecase の形は [five-viewpoints.md](five-viewpoints.md) §5、`main_test.go` と `usecasetest` は [setup.md](setup.md)。行の型は sqlc が生成した `sqlcgen.*`。無断不利用は資料に無い 9 表目 `reservation_no_show_recorded_events`（詳細イベント表。列は `id` と `base_event_id`）に、基底イベント `reservation_base_events` の `event_type = 'no_show_recorded'` の行とともに残る、と仮定している（題材のデータモデル資料は無断不利用を範囲外にしている。実装時は資料とリポジトリの実装の表に従う）。
+題材の usecase の形は [five-viewpoints.md](five-viewpoints.md) §5、`main_test.go` と `usecasetest` は [setup.md](setup.md)。行の型は sqlc が生成した `sqlcgen.*`。この完全例は、対象資料と実装が`reservation_no_show_recorded_events`（詳細イベント表。列は`id`と`base_event_id`）、基底イベントの`event_type = 'no_show_recorded'`、期限切れと無断不利用を記録する主体の`actor_code`を確定している場合だけ利用する。いずれかが未決または対象外なら、行や値を補わず、影響するfixtureと期待DB行を示して停止する。
 
 ### 5.1 `ConfirmReservation` — 入力解決・呼び分け・tx 境界
 
@@ -115,7 +115,7 @@ func TestConfirmReservation_Execute(t *testing.T) {
 		deadline        = sqlcgen.TentativeHoldDeadline{ReservationID: "R-0101", ExpiresAt: deadlineAt, CreatedAt: heldAt}
 		heldEvent       = sqlcgen.ReservationBaseEvent{ID: 1, ReservationID: "R-0101", EventType: "tentative_created", Version: 1, ActorCode: "C-4102", OccurredAt: heldAt}
 		confirmedEvent  = sqlcgen.ReservationBaseEvent{ID: 2, ReservationID: "R-0101", EventType: "confirmed", Version: 2, ActorCode: "C-4102", OccurredAt: confirmAt}
-		strayExpired    = sqlcgen.ReservationBaseEvent{ID: 2, ReservationID: "R-0101", EventType: "expired", Version: 2, ActorCode: "期限管理", OccurredAt: deadlineAt} // actor_code "期限管理" は資料の未決（期限切れを記録する主体）。物理設計で値が決まるまでの仮の値で、報告に載せる
+		strayExpired    = sqlcgen.ReservationBaseEvent{ID: 2, ReservationID: "R-0101", EventType: "expired", Version: 2, ActorCode: "期限管理", OccurredAt: deadlineAt} // この例では対象資料が期限切れの記録主体を「期限管理」と確定している
 		confirmedDetail = sqlcgen.ReservationConfirmedEvent{ID: 1, BaseEventID: 2}
 	)
 
@@ -275,7 +275,7 @@ func TestHoldReservation_Execute(t *testing.T) {
 		// 顧客 C-5821 の確定予約 3 件に無断不利用が記録されている。
 		// 直近 30 日に 3 回で、3 回目（8月24日）から 14 日以内なので、9月1日 の C-5821 は仮押さえ停止中。
 		// 読まれるのは無断不利用のイベントだけなので、version 1・2 のイベントは置かない（観点が読む行だけを投入する）。
-		// actor_code "不利用判定" は資料の未決（無断不利用を記録する主体）。物理設計で値が決まるまでの仮の値で、報告に載せる。
+		// この例では対象資料が無断不利用の記録主体を「不利用判定」と確定している。
 		noShowHistory = []sqlcgen.Reservation{
 			{ReservationID: "R-0101", RoomCode: "M-301", CustomerCode: "C-5821", StartsAt: time.Date(2026, 8, 10, 10, 0, 0, 0, time.UTC), EndsAt: time.Date(2026, 8, 10, 11, 0, 0, 0, time.UTC), Status: "confirmed", CurrentVersion: 3, CreatedAt: time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC), UpdatedAt: noShow1},
 			{ReservationID: "R-0102", RoomCode: "M-301", CustomerCode: "C-5821", StartsAt: time.Date(2026, 8, 17, 10, 0, 0, 0, time.UTC), EndsAt: time.Date(2026, 8, 17, 11, 0, 0, 0, time.UTC), Status: "confirmed", CurrentVersion: 3, CreatedAt: time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC), UpdatedAt: noShow2},
