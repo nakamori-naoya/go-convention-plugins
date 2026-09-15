@@ -45,7 +45,7 @@ description: 集約・エンティティ・値オブジェクトのテストを�
    go vet ./<domain package>/...
    go test -shuffle=on -count=1 ./<domain package>/...
    go test -count=1 -run 'TestHold/BDD-001_' ./<domain package>/...   # 足したケースを 1 つずつ単独で
-   python3 "${CLAUDE_PLUGIN_ROOT}/skills/test-domain-model/scripts/check-bdd-coverage.py" <domain-model の正本の資料.md> <テストのディレクトリ>
+   python3 "${CLAUDE_PLUGIN_ROOT}/skills/test-domain-model/scripts/check-bdd-coverage.py" <domain-rule 資料.md（### [BDD-NNN] 見出しを持つ資料）> <テストのディレクトリ>
    ```
    テストの形（`id` の一意・順序・`description` の形）の検査は、テストの形の共通規則の検査を別途通す
 7. **報告する。** 下の「報告」の項目

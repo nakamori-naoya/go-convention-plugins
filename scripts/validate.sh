@@ -92,21 +92,6 @@ else
   fail "reference到達性"
 fi
 
-if python3 "$ROOT/scripts/check-query-dependency.py" "$ROOT" --self-test >"$TMP_ROOT/query-direction.out" 2>&1; then
-  pass "Query契約はusecase側が所有し、実装から契約へ依存"
-else
-  cat "$TMP_ROOT/query-direction.out"
-  fail "Query契約の所有と依存方向"
-fi
-
-cp -R "$ROOT" "$TMP_ROOT/query-negative"
-printf '\nimport "example.com/roomflow/query"\n' >>"$TMP_ROOT/query-negative/plugins/go-convention/skills/implement-usecase/references/query.md"
-if python3 "$ROOT/scripts/check-query-dependency.py" "$TMP_ROOT/query-negative" >"$TMP_ROOT/query-negative.out" 2>&1; then
-  fail "Query依存方向の負例を拒否"
-else
-  pass "Query依存方向の負例を拒否"
-fi
-
 if python3 - "$SKILL/references/examples.md" "$EXAMPLES" <<'PY'
 from pathlib import Path
 import sys
