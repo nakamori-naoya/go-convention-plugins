@@ -1,5 +1,5 @@
 ---
-name: test-handler
+name: go-convention-internal-test-handler
 description: Connect-RPC の handler を、本番と同じ組み立てで `httptest.NewServer` に起動し、生成クライアントで公開 API として叩くテスト（API テスト）を書く・直す。proto と入力の変換、sentinel から `connect.Code` への翻訳と公開文言、認可（主体無し・他人）、成功後の永続化の反映、レスポンスの内容を 1 RPC あたり 4〜8 ケースで確かめる。「この RPC のテストを書いて」「handler のテストを書いて」「API テストを足して」と言われたときに使う。handler の単体テスト、偽の usecase やリポジトリへの差し替え、業務の境界値、SQL、全テーブル・全カラムの突き合わせ、usecase の 5 観点、ログの有無は対象外として、それぞれの層のテスト規約へ返す。
 ---
 

@@ -13,4 +13,3 @@ description: 確定済みの論理責務と集約境界を Go の package 配置
 2. `bash "<package root>/playbooks/go-convention/apply-go-package-layout/scripts/prepare.sh"`を実行する。
 3. `<package root>/skills/apply-go-package-layout/SKILL.md`を読み、その手順だけに従う。
 4. `scripts/resolve.sh`は対応を機械可読なJSONとして返す。
-

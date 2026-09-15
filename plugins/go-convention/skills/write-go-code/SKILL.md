@@ -1,5 +1,5 @@
 ---
-name: write-go-code
+name: go-convention-internal-write-go-code
 description: Go 1.27 のコードを、層を問わない言語レベルの規約（返り値は最大 2 つ、naked return 禁止、ctx 第一引数、値渡し既定、使う側で定義する小さな interface、封じた struct の列挙、init 禁止、明示・丸めない・フォールバックしない・ガード節、標準ライブラリの 1.27 idiom、gofmt / go vet / golangci-lint / go fix）で書く・直す。「この Go コードを規約に合わせて」「Go の書き方を確認したい」「この関数のシグネチャを直して」「1.27 の書き方にして」と言われたとき、また層別の実装規約（ドメイン・永続化・usecase・handler）がこの規約を土台に指定したときに使う。ドメインモデルの設計、リポジトリと query service の形、usecase と handler の形、エラーの定義と翻訳、ログの置き場、テストの形と厚みは対象外としてそれぞれの規約へ返す。
 ---
 

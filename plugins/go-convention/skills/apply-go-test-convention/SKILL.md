@@ -1,5 +1,5 @@
 ---
-name: apply-go-test-convention
+name: go-convention-internal-apply-go-test-convention
 description: Go のテストを、層を問わない共通規約（1メソッド・1関数につきテスト関数は1つ、外部テストパッケージ、無名 struct のテーブル駆動、資料の BDD ID をそのまま使う id と見出し・gherkin の転記、testify の require/assert）で書く・直す。「テストを書いて」「このテストを規約に合わせて」「テスト規約を確認したい」と言われたとき、また層別のテスト規約（ドメイン層・永続化層・usecase・handler）がこの規約を土台に指定したときに使う。何をテストするか（層ごとの厚みと責務）・前提データの作り方（復元・DB）・どの資料のどの BDD をどの package が対象にするかは対象外として層別の規約へ返す。
 ---
 

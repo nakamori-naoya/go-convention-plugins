@@ -1,5 +1,5 @@
 ---
-name: implement-query-service
+name: go-convention-internal-implement-query-service
 description: CQRSの読み取り側をPostgreSQL、pgx/v5、sqlcで実装する。ユースケース側が所有する読み取り契約を満たし、関係射影と集計はSQL、SQLに適さない確認済み業務計算は値オブジェクトまたは純関数で行う。集約・エンティティを復元・操作せず、書き込まず、txを張らない。「この一覧を実装して」「空き状況のQuery実装を書いて」と言われたときに使う。
 ---
 

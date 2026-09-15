@@ -1,5 +1,5 @@
 ---
-name: handle-errors
+name: go-convention-internal-handle-errors
 description: Go のエラーを、資料の「拒む理由」と 1:1 の sentinel（`errors.New`・日本語文言）、層境界で 1 回だけの `fmt.Errorf("...: %w")`、`errors.Is` での判定、境界 1 か所の `connect.Code` 対応表、という一つの形で書く・直す。「エラーを定義して」「このエラーの包み方を直して」「エラーを connect.Code に翻訳して」「エラー文言を揃えて」と言われたとき、また層別の実装規約が「エラーの規約」としてここを指したときに使う。エラーをどこで記録するか（ログの規約）と、テストでエラーをどう検証するか（テストの形の共通規則）は対象外として、それぞれの規約へ返す。
 ---
 

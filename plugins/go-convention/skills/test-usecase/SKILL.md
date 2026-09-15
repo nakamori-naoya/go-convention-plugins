@@ -1,5 +1,5 @@
 ---
-name: test-usecase
+name: go-convention-internal-test-usecase
 description: usecase（command / query）のテストを、実 DB（dockertest の PostgreSQL）・実リポジトリ・実 tx・実 query service で通し、5 観点（入力解決・複数集約の協調・ソース選択・トランザクション境界・コマンド呼び分けと永続化）の配線だけを DB の状態と返り値で確かめる形で書く・直す。「この usecase のテストを書いて」「usecase のテストが厚すぎないか見て」「tx 境界のテストを足して」と言われたときに使う。業務ルールの網羅（ドメイン層）、全テーブル・全カラムの突き合わせと SQL の正確さ（永続化層）、proto 変換・connect.Code・認可（handler）、テストの形の共通規則そのものは対象外として、それぞれの規約へ返す。
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: test-repository
+name: go-convention-internal-test-repository
 description: 永続化層（集約のリポジトリと query service）のテストを、dockertest で起動した実 PostgreSQL の上で書く・直す。リポジトリはデータモデル資料の BDD を「Before を投入 → 復元 → 実物の集約の操作 → 保存 → 資料の全テーブルを全行で突き合わせ」で写し、DB 制約違反の翻訳・楽観ロック競合・同時実行・NotFound を確かめる。query service は「Before を投入 → 読み取り → DTO を突き合わせ」で書く。「リポジトリのテストを書いて」「Apply{Event} のテストを足して」「query service のテストを書いて」「データモデル資料の BDD をテストにして」と言われたときに使う。集約・値オブジェクトの規則のテスト、usecase の tx 境界と協調のテスト、handler のテスト、リポジトリの実装そのものは対象外として、それぞれの規約へ返す。
 ---
 
