@@ -4,7 +4,7 @@
 #        各skillのreference、check-cases.py、tests/examplesのGoモジュールがある
 # When: root契約（package境界・内部skillの自己完結）、identity、入口と内部skillの対応、reference到達性、例と断片の一致、
 #       check-cases.pyの正常系・正例・負例、develop-<layer>のTDD工程順、shell構文、goのgofmt・vet・shuffleテストを実行する
-# Then: 不整合が一つでもあれば非0で終了する。goが無ければgofmt・vet・testは省略と表示し失敗にしない
+# Then: 不整合が一つでもあれば非0で終了する。兄弟checkout harness-tools が無ければ止まる。goが無ければgofmt・vet・testは省略と表示し失敗にしない
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -37,12 +37,10 @@ for cmd in bash find jq python3 rg; do
   command -v "$cmd" >/dev/null 2>&1 && pass "command $cmd" || fail "command $cmd が無い"
 done
 
-WORKSPACE_VALIDATOR="$ROOT/../scripts/validate-plugin-repository.py"
-if [ -f "$WORKSPACE_VALIDATOR" ]; then
-  python3 "$WORKSPACE_VALIDATOR" "$ROOT" >"$TMP_ROOT/root-contract.out" 2>&1 && pass "root契約（package境界・内部skillの自己完結）" || { cat "$TMP_ROOT/root-contract.out"; fail "root契約（package境界・内部skillの自己完結）"; }
-else
-  skip "workspace rootのvalidate-plugin-repository.pyが無いためroot契約を省略"
-fi
+# root契約の正本は兄弟checkout harness-tools だけ。無ければ止まる（省略もfixtureによる代用もしない）。
+TOOLS="$ROOT/../harness-tools/tools"
+[ -d "$TOOLS" ] || { echo "[error] 兄弟 checkout harness-tools が無い: $TOOLS" >&2; exit 2; }
+python3 "$TOOLS/validate-plugin-repository.py" "$ROOT" >"$TMP_ROOT/root-contract.out" 2>&1 && pass "root契約（package境界・内部skillの自己完結）" || { cat "$TMP_ROOT/root-contract.out"; fail "root契約（package境界・内部skillの自己完結）"; }
 
 VERSION=$(jq -er '.version' "$PLUGIN/.claude-plugin/plugin.json") || VERSION=""
 if [ -n "$VERSION" ] \
