@@ -14,7 +14,7 @@
 | 空: 該当する行が無いとき、DTO の一覧が nil（または空）で、error にならない | 集約の復元、`Restore*` の呼び出し |
 | 並び順: DTO の一覧が宣言された順（利用開始順）で返る | 書き込みメソッドの追加（query service に書き込みは無い） |
 
-4 観点（フィルタ・ページング・NULL・空）を読み取りメソッド 1 つにつき最低 1 ケースずつ持つ。観点が対象に無ければ書かない（`ListForDay` にページングは無い）。題材の表に NULL 許可列は無いが、`ListForDay` は `tentative_hold_deadlines` を LEFT JOIN するので `expires_at` が NULL になる。NULL 観点はここで持つ。
+フィルタ・ページング・NULL・空のうち対象メソッドに実在する分岐を列挙し、入力と返る DTO の違いを観測できるケースへ割り振る。1 ケースで複数観点を区別できるなら兼ねる。観点が対象に無ければ書かない（`ListForDay` にページングは無い）。題材の表に NULL 許可列は無いが、`ListForDay` は `tentative_hold_deadlines` を LEFT JOIN するので `expires_at` が NULL になる。NULL 観点はここで持つ。
 
 ## 2. 形
 

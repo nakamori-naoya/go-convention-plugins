@@ -1,6 +1,6 @@
 # go-convention
 
-**Go 1.27 の実装とテストの規約を、関心ごとに分けた 14 の入口から適用します。** 各入口は同名の内部 skill（`skills/<name>/SKILL.md`）へルーティングするだけで、規約の正本は内部 skill にあります。
+**Go 1.27 の実装とテストの規約を、関心ごとに分けた 14 の自己完結skillから適用します。** package manifestが`skills/<name>/SKILL.md`を直接公開し、規約の正本は各skill、工程順序の正本は同じdirectoryの`playbook.yml` v2にあります。同じagentが`agent_work: invoking_agent`の工程を宣言順に実行します。
 
 ## これは何か／何ではないか
 
@@ -35,7 +35,7 @@
 
 ## 出力
 
-各内部 skill の `SKILL.md`「報告」の節を参照してください。
+各skillの `SKILL.md`「報告」の節を参照してください。
 
 ## 設定
 

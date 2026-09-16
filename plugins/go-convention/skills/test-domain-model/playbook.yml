@@ -1,0 +1,30 @@
+version: 2
+name: test-domain-model
+description: test-domain-modelの仕事を同じagentが宣言順に完了する。
+inputs: [request]
+instructions:
+  execution:
+    directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する
+requires: []
+steps:
+  - id: compare-source-and-implementation
+    agent_work: invoking_agent
+    purpose: "資料と実装を突き合わせる"
+  - id: list-test-functions
+    agent_work: invoking_agent
+    purpose: "テスト関数の一覧を作る"
+  - id: copy-source-cases
+    agent_work: invoking_agent
+    purpose: "資料のケースを写す"
+  - id: add-derived-cases
+    agent_work: invoking_agent
+    purpose: "資料に無いケースを足す"
+  - id: write-omission-comments
+    agent_work: invoking_agent
+    purpose: "末尾コメントを書く"
+  - id: run-structural-checks
+    agent_work: invoking_agent
+    purpose: "機械検査を通す"
+  - id: report
+    agent_work: invoking_agent
+    purpose: "報告する"

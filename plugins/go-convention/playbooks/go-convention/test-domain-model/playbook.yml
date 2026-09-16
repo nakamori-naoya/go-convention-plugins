@@ -1,9 +1,0 @@
-version: 2
-name: test-domain-model
-description: 集約・エンティティ・値オブジェクトのテストを資料の BDD から書く。同名の内部skillへ1工程でルーティングする独立プレイブック
-instructions:
-  execution:
-    directive: 対応する内部skillだけを実行し、他の関心の規約を暗黙に適用しない
-requires: []
-steps:
-  - {id: apply, skill: test-domain-model, purpose: 集約・エンティティ・値オブジェクトのテストを資料の BDD から書く, needs: [request], provides: [result]}

@@ -12,13 +12,13 @@ bash scripts/validate.sh
 
 ## 配布契約（root 契約と identity）
 
-workspace root の `scripts/validate-plugin-repository.py` で、package 境界の契約（公開・インストール対象が playbook package 1 件であること、manifest の `metadata.harness.playbooks` / `internalPlugins` の宣言、Codex / Claude manifest の同一性、内部 skill の自己完結＝`skills/**/*.md` に兄弟 skill 名と「playbook」「プレイブック」が現れないこと）を確認します。workspace root が無い環境では「省略」と表示します。
+workspace root の `scripts/validate-plugin-repository.py` で、package 境界の契約（公開・インストール対象がpackage 1件であること、Codex / Claude manifest の同一性、manifestが宣言した直接公開skillの実在、symlink不在）を確認します。workspace root が無い環境では「省略」と表示します。
 
-続けて、両 marketplace の identity（名前・version・source）が manifest と一致すること、manifest が 14 の入口と 14 の内部 skill を宣言し `skills` が入口だけであること、各入口 `playbooks/go-convention/<name>/` に `SKILL.md` / `playbook.yml` / `scripts/prepare.sh` / `scripts/resolve.sh` が在り、`prepare.sh` が成功し、`resolve.sh` が同名の内部 skill を返し、`playbook.yml` が同名の内部 skill へ 1 工程で振り、`skills/<name>/SKILL.md` が在ることを確認します。入口と内部 skill の directory がそれぞれ 14 であることも確認します。
+続けて、両 marketplace の identity（名前・version・source）が manifest と一致すること、manifest が `skills/` 配下の14skillを直接宣言すること、各directoryの`SKILL.md`とnameが一致することを確認します。各skill直下の`playbook.yml` v2についてidentity、宣言順、`agent_work: invoking_agent`、実値を宣言した場合のneeds/provides接続も正例・負例で確認します。存在確認だけのprepare、外側の単一routing、入口別manifestは検査対象にしません。
 
 ## 規約の資料と例
 
-全内部 skill について、`SKILL.md` から `references/*.md` への直接リンクが過不足なく在ること、reference 間のリンク先が在ることを確認します。テストの形の skill については、`references/examples.md` と `tests/examples/` のテストコードの一致、`table.md` / `given.md` / `then.md` / `case-identity.md` の Go ブロックが `tests/examples/` の部分文字列であること、shell 構文を確認します。
+全skillについて、`SKILL.md` から `references/*.md` への直接リンクが過不足なく在ること、reference 間のリンク先が在ることを確認します。テストの形の skill については、`references/examples.md` と `tests/examples/` のテストコードの一致、`table.md` / `given.md` / `then.md` / `case-identity.md` の Go ブロックが `tests/examples/` の部分文字列であること、shell 構文を確認します。
 
 ## check-cases.py
 

@@ -159,6 +159,28 @@ Then: PermissionDenied で拒まれ、文言は「他人の予約は操作でき
 			wantMessage: reservation.ErrNotOwner.Error(),
 		},
 		{
+			id:   "d8b72c",
+			name: "確定済みの予約は再確定できない",
+			description: `Given: 予約 R-20260901-0101 は顧客 C-4102 の確定済み予約である
+When: C-4102 が R-20260901-0101 の確定を再び求める
+Then: FailedPrecondition で拒まれ、文言は「確定済みの予約は再確定できない」である`,
+			seedReservations: []sqlcgen.Reservation{{
+				ReservationID:  "R-20260901-0101",
+				RoomCode:       "M-301",
+				CustomerCode:   "C-4102",
+				StartsAt:       time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC),
+				EndsAt:         time.Date(2026, 9, 18, 11, 30, 0, 0, time.UTC),
+				Status:         "confirmed",
+				CurrentVersion: 2,
+				CreatedAt:      time.Date(2026, 9, 1, 9, 0, 0, 0, time.UTC),
+				UpdatedAt:      time.Date(2026, 9, 1, 9, 5, 0, 0, time.UTC),
+			}},
+			caller:      "C-4102",
+			req:         &roomflowv1.ConfirmReservationRequest{ReservationId: "R-20260901-0101"},
+			wantCode:    connect.CodeFailedPrecondition,
+			wantMessage: reservation.ErrAlreadyConfirmed.Error(),
+		},
+		{
 			id:   "52b7c0",
 			name: "存在しない予約は確定できない",
 			description: `Given: 予約は 1 件も無い

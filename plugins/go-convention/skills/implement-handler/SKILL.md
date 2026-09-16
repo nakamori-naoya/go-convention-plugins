@@ -1,9 +1,11 @@
 ---
-name: go-convention-internal-implement-handler
+name: implement-handler
 description: Connect-RPC（connectrpc.com/connect ＋ protobuf）の入口を Go で実装する・直す。生成された `{Service}Handler` を満たす薄い server 実装、proto の要求・応答と usecase の入出力を往復させる変換関数、返った error を 1 回だけ記録して `connect.Code` へ翻訳し呼び手の主体を ctx へ載せる interceptor、操作の時刻を決めるサーバーの `Clock`、`NewMux(Deps)` での依存の組み立てと `main` の `run(ctx) error` での起動と graceful shutdown を定める。「この RPC を実装して」「handler を書いて」「proto と usecase をつないで」「interceptor を置いて」「main の組み立てを書いて」と言われたときに使う。業務判断・トランザクション・永続化・エラーの分類表の中身・ログのレベルと語彙・何をテストするかは対象外として、それぞれの規約へ返す。
 ---
 
 # implement-handler
+
+[工程順序の正本](playbook.yml)を最初に読み、同じagentが\`steps\`を宣言順に実行する。YAMLは工程順序を決め、各工程の判断内容と根拠はこの本文と参照資料を実読して評価する。失敗時は成功扱いせず停止して、完了工程、根拠、未決を残し、再開時は最初の未完了工程から続ける。
 
 これは、**RPC の要求を usecase の入力へ写し、usecase を 1 つ呼び、結果を応答へ写して返す薄い層の書き方**である。何を許し何を拒むかは集約と usecase が決め、handler はその入口と出口だけを持つ。
 

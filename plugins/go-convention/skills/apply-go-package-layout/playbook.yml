@@ -1,0 +1,24 @@
+version: 2
+name: apply-go-package-layout
+description: apply-go-package-layoutの仕事を同じagentが宣言順に完了する。
+inputs: [request]
+instructions:
+  execution:
+    directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する
+requires: []
+steps:
+  - id: inspect-logical-input
+    agent_work: invoking_agent
+    purpose: "論理入力を検査する"
+  - id: map-package-tree
+    agent_work: invoking_agent
+    purpose: "Go package treeへ写す"
+  - id: decide-names-and-public-surface
+    agent_work: invoking_agent
+    purpose: "package名と公開面を決める"
+  - id: apply-import-direction
+    agent_work: invoking_agent
+    purpose: "import方向を適用する"
+  - id: repair-references-and-verify
+    agent_work: invoking_agent
+    purpose: "移動後の参照を直して検証する"

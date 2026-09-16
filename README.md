@@ -1,6 +1,6 @@
 # Go Convention Plugins
 
-Go 1.27 の実装とテストの規約を関心ごとに分けて配布する、Claude Code / Codex 両対応の marketplace です。公開 package は `go-convention` 1 件で、14 の入口（[plugin README](plugins/go-convention/README.md) の表）がそれぞれ同名の内部 skill へルーティングします。規約の正本は各内部 skill の `SKILL.md` と `references/` です。
+Go 1.27 の実装とテストの規約を関心ごとに分けて配布する、Claude Code / Codex 両対応の marketplace です。公開 package は `go-convention` 1 件で、14 の自己完結skill（[plugin README](plugins/go-convention/README.md) の表）をpackage manifestから直接公開します。規約の正本は各skillの `SKILL.md` と `references/`、工程順序の正本は各skill直下の`playbook.yml` v2です。
 
 ## こんなときに使う
 

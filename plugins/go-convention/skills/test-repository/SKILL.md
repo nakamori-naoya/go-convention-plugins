@@ -1,9 +1,11 @@
 ---
-name: go-convention-internal-test-repository
+name: test-repository
 description: 永続化層（集約のリポジトリと query service）のテストを、dockertest で起動した実 PostgreSQL の上で書く・直す。リポジトリはデータモデル資料の BDD を「Before を投入 → 復元 → 実物の集約の操作 → 保存 → 資料の全テーブルを全行で突き合わせ」で写し、DB 制約違反の翻訳・楽観ロック競合・同時実行・NotFound を確かめる。query service は「Before を投入 → 読み取り → DTO を突き合わせ」で書く。「リポジトリのテストを書いて」「Apply{Event} のテストを足して」「query service のテストを書いて」「データモデル資料の BDD をテストにして」と言われたときに使う。集約・値オブジェクトの規則のテスト、usecase の tx 境界と協調のテスト、handler のテスト、リポジトリの実装そのものは対象外として、それぞれの規約へ返す。
 ---
 
 # test-repository
+
+[工程順序の正本](playbook.yml)を最初に読み、同じagentが\`steps\`を宣言順に実行する。YAMLは工程順序を決め、各工程の判断内容と根拠はこの本文と参照資料を実読して評価する。失敗時は成功扱いせず停止して、完了工程、根拠、未決を残し、再開時は最初の未完了工程から続ける。
 
 これは、**永続化層のテストを、実 DB の上で「資料の Before から After へ行がどう変わるか」を全テーブルの全行で確かめる形に揃える規約**である。リポジトリのテストは復元 → 実物の集約の操作 → 保存で駆動し、query service のテストは Before を投入 → 読み取り → DTO の突き合わせで駆動する。
 
@@ -31,12 +33,12 @@ description: 永続化層（集約のリポジトリと query service）のテ�
 4. **表を書く。** 資料の順に `id`（資料の ID）/ `name`（見出し文）/ `description`（gherkin ブロックの転記）、`seed{Table}` × 全テーブル（Before）、When の引数、`wantErr`、`want{Table}` × 全テーブル（After）。資料に無いケース（楽観ロック競合・復元・NotFound）を生成した id でその後ろに足す。完了条件: `description` の各行からフィールドの値が説明でき、全ケースが資料の全テーブル分の `want{Table}`（0 行は書かない）を持つ
 5. **ループ本体を書く。** `Reset` → 全 `Seed` → `rdbtest.Run` の中で復元 → 絞り込み → 実物の操作 → 保存 → error の検証 → 全 `Read` → 全 `assert.Equal`。When が 2 件以上のケースがあれば [table-shape.md](references/table-shape.md) §4 の並走の形にする。完了条件: 全テーブルの `Read` と `assert.Equal` が error の分岐の外に 1 回ずつあり、`t.Parallel()` が無い
 6. **末尾コメントを書く。** 資料にあるが書かない BDD を `// テストしない BDD:` に続けて ID と理由で列挙する。完了条件: 資料の全 ID が `id:` か末尾コメントのどちらか一方に現れる
-7. **機械検査を通す。** テストの形の共通規則の機械検査を通した上で、次を実行する。`CLAUDE_PLUGIN_ROOT` は Claude Code が展開する。Codex では、この `SKILL.md` があるディレクトリの 2 つ上（plugin root）の絶対パスを入れる
+7. **機械検査を通す。** テストの形の共通規則の機械検査を通した上で、次を実行する。`scripts/check-bdd-coverage.py` はこの `SKILL.md` があるディレクトリ直下の tool で、引数はデータモデル資料とテストのあるディレクトリ。資料の BDD ID が `id:` か末尾コメントのどちらにも無い、または資料に無い ID を使っていれば、その箇所を 1 行ずつ stdout に出して終了コード 1。資料や `*_test.go` が無ければ stderr に理由を出して終了コード 2。違反が無ければ `違反なし` と終了コード 0。違反が出たらテストか末尾コメントを直してから再実行する
    ```bash
    go vet ./...
    go test -count=1 ./rdb/ ./query/
    go test -count=1 -run 'TestReservationRepository_ApplyHeld/BDD-005_' ./rdb/   # 足したケースを 1 つずつ単独で
-   python3 "${CLAUDE_PLUGIN_ROOT}/skills/test-repository/scripts/check-bdd-coverage.py" <データモデル資料.md> <テストのあるディレクトリ>
+   python3 scripts/check-bdd-coverage.py <データモデル資料.md> <テストのあるディレクトリ>
    ```
 8. **報告する。** 「報告」の項目を返す
 

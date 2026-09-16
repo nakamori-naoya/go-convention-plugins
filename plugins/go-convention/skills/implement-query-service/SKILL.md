@@ -1,9 +1,11 @@
 ---
-name: go-convention-internal-implement-query-service
+name: implement-query-service
 description: CQRSの読み取り側をPostgreSQL、pgx/v5、sqlcで実装する。ユースケース側が所有する読み取り契約を満たし、関係射影と集計はSQL、SQLに適さない確認済み業務計算は値オブジェクトまたは純関数で行う。集約・エンティティを復元・操作せず、書き込まず、txを張らない。「この一覧を実装して」「空き状況のQuery実装を書いて」と言われたときに使う。
 ---
 
 # implement-query-service
+
+[工程順序の正本](playbook.yml)を最初に読み、同じagentが\`steps\`を宣言順に実行する。YAMLは工程順序を決め、各工程の判断内容と根拠はこの本文と参照資料を実読して評価する。失敗時は成功扱いせず停止して、完了工程、根拠、未決を残し、再開時は最初の未完了工程から続ける。
 
 読み取りポートのRDB実装を、SQLによる関係射影・集計と、必要な値オブジェクトまたは純関数による業務計算から組み立てる。
 

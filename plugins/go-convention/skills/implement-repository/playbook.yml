@@ -1,0 +1,33 @@
+version: 2
+name: implement-repository
+description: implement-repositoryの仕事を同じagentが宣言順に完了する。
+inputs: [request]
+instructions:
+  execution:
+    directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する
+requires: []
+steps:
+  - id: decide-types
+    agent_work: invoking_agent
+    purpose: "型を決める"
+  - id: map-table-operations
+    agent_work: invoking_agent
+    purpose: "テーブル操作を表にする"
+  - id: write-and-generate-query
+    agent_work: invoking_agent
+    purpose: "query を書き、生成する"
+  - id: write-marshaller
+    agent_work: invoking_agent
+    purpose: "marshaller を書く"
+  - id: write-methods
+    agent_work: invoking_agent
+    purpose: "メソッドを書く"
+  - id: inspect-error-translation
+    agent_work: invoking_agent
+    purpose: "翻訳表を確かめる"
+  - id: compile
+    agent_work: invoking_agent
+    purpose: "コンパイルを通す"
+  - id: report
+    agent_work: invoking_agent
+    purpose: "報告する"

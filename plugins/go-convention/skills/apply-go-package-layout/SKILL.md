@@ -1,9 +1,11 @@
 ---
-name: go-convention-internal-apply-go-package-layout
+name: apply-go-package-layout
 description: 確定済みの論理責務、集約境界、Command・Query区分を、Go 1.27のpackage treeとimport方向へ写し、配置違反を修正する。「Goのpackageをどう切るか」「この責務をどこへ置くか」「import cycleを避けてCQRSを配置して」と言われ、論理的な所有者が既に決まっているときに使う。
 ---
 
 # apply-go-package-layout
+
+[工程順序の正本](playbook.yml)を最初に読み、同じagentが\`steps\`を宣言順に実行する。YAMLは工程順序を決め、各工程の判断内容と根拠はこの本文と参照資料を実読して評価する。失敗時は成功扱いせず停止して、完了工程、根拠、未決を残し、再開時は最初の未完了工程から続ける。
 
 確定済みの論理責務と集約境界を受け取り、Goのdirectory、package、importが一意に対応する状態へ直す。
 
