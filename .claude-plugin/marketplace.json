@@ -9,7 +9,7 @@
       "name": "go-convention",
       "source": "./plugins/go-convention",
       "description": "Go package 配置・コーディング・ドメインモデル・永続化・usecase・handler・エラー・ログ・テストの14の独立した規約入口を提供する",
-      "version": "1.0.0"
+      "version": "2.0.0"
     }
   ]
 }
