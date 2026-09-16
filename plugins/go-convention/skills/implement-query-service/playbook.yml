@@ -1,0 +1,24 @@
+version: 2
+name: implement-query-service
+description: implement-query-serviceの仕事を同じagentが宣言順に完了する。
+inputs: [request]
+instructions:
+  execution:
+    directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する
+requires: []
+steps:
+  - id: inspect-contract-and-derivation
+    agent_work: invoking_agent
+    purpose: "契約と導出根拠を確認する"
+  - id: write-sql
+    agent_work: invoking_agent
+    purpose: "SQLを書く"
+  - id: assemble-read-model
+    agent_work: invoking_agent
+    purpose: "読み取りモデルを組み立てる"
+  - id: implement-query-type
+    agent_work: invoking_agent
+    purpose: "Query型を実装する"
+  - id: verify-contract
+    agent_work: invoking_agent
+    purpose: "契約と検証する"

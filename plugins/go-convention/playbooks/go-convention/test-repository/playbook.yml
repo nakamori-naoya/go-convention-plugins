@@ -1,9 +1,0 @@
-version: 2
-name: test-repository
-description: 永続化層（リポジトリ・query service）のテストをデータモデル資料から書く。同名の内部skillへ1工程でルーティングする独立プレイブック
-instructions:
-  execution:
-    directive: 対応する内部skillだけを実行し、他の関心の規約を暗黙に適用しない
-requires: []
-steps:
-  - {id: apply, skill: test-repository, purpose: 永続化層（リポジトリ・query service）のテストをデータモデル資料から書く, needs: [request], provides: [result]}

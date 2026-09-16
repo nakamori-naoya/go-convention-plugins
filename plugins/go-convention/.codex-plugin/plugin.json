@@ -6,20 +6,20 @@
     "name": "NaoyaNakamori"
   },
   "skills": [
-    "./playbooks/go-convention/write-go-code",
-    "./playbooks/go-convention/apply-go-package-layout",
-    "./playbooks/go-convention/implement-domain-model",
-    "./playbooks/go-convention/implement-repository",
-    "./playbooks/go-convention/implement-query-service",
-    "./playbooks/go-convention/implement-usecase",
-    "./playbooks/go-convention/implement-handler",
-    "./playbooks/go-convention/handle-errors",
-    "./playbooks/go-convention/write-logs",
-    "./playbooks/go-convention/apply-go-test-convention",
-    "./playbooks/go-convention/test-domain-model",
-    "./playbooks/go-convention/test-repository",
-    "./playbooks/go-convention/test-usecase",
-    "./playbooks/go-convention/test-handler"
+    "./skills/write-go-code",
+    "./skills/apply-go-package-layout",
+    "./skills/implement-domain-model",
+    "./skills/implement-repository",
+    "./skills/implement-query-service",
+    "./skills/implement-usecase",
+    "./skills/implement-handler",
+    "./skills/handle-errors",
+    "./skills/write-logs",
+    "./skills/apply-go-test-convention",
+    "./skills/test-domain-model",
+    "./skills/test-repository",
+    "./skills/test-usecase",
+    "./skills/test-handler"
   ],
   "interface": {
     "displayName": "Go Convention",
@@ -38,126 +38,8 @@
   },
   "metadata": {
     "harness": {
-      "installationSurface": "playbook-package",
       "marketplace": "go-convention",
-      "playbooks": {
-        "write-go-code": "./playbooks/go-convention/write-go-code",
-        "apply-go-package-layout": "./playbooks/go-convention/apply-go-package-layout",
-        "implement-domain-model": "./playbooks/go-convention/implement-domain-model",
-        "implement-repository": "./playbooks/go-convention/implement-repository",
-        "implement-query-service": "./playbooks/go-convention/implement-query-service",
-        "implement-usecase": "./playbooks/go-convention/implement-usecase",
-        "implement-handler": "./playbooks/go-convention/implement-handler",
-        "handle-errors": "./playbooks/go-convention/handle-errors",
-        "write-logs": "./playbooks/go-convention/write-logs",
-        "apply-go-test-convention": "./playbooks/go-convention/apply-go-test-convention",
-        "test-domain-model": "./playbooks/go-convention/test-domain-model",
-        "test-repository": "./playbooks/go-convention/test-repository",
-        "test-usecase": "./playbooks/go-convention/test-usecase",
-        "test-handler": "./playbooks/go-convention/test-handler"
-      },
-      "internalPlugins": {
-        "write-go-code": "./skills/write-go-code",
-        "apply-go-package-layout": "./skills/apply-go-package-layout",
-        "implement-domain-model": "./skills/implement-domain-model",
-        "implement-repository": "./skills/implement-repository",
-        "implement-query-service": "./skills/implement-query-service",
-        "implement-usecase": "./skills/implement-usecase",
-        "implement-handler": "./skills/implement-handler",
-        "handle-errors": "./skills/handle-errors",
-        "write-logs": "./skills/write-logs",
-        "apply-go-test-convention": "./skills/apply-go-test-convention",
-        "test-domain-model": "./skills/test-domain-model",
-        "test-repository": "./skills/test-repository",
-        "test-usecase": "./skills/test-usecase",
-        "test-handler": "./skills/test-handler"
-      },
-      "implements": [
-        {
-          "id": "go-convention/apply-go-package-layout",
-          "version": 1,
-          "kind": "playbook",
-          "playbook": "apply-go-package-layout"
-        },
-        {
-          "id": "go-convention/write-go-code",
-          "version": 1,
-          "kind": "playbook",
-          "playbook": "write-go-code"
-        },
-        {
-          "id": "go-convention/implement-domain-model",
-          "version": 1,
-          "kind": "playbook",
-          "playbook": "implement-domain-model"
-        },
-        {
-          "id": "go-convention/implement-repository",
-          "version": 1,
-          "kind": "playbook",
-          "playbook": "implement-repository"
-        },
-        {
-          "id": "go-convention/implement-query-service",
-          "version": 1,
-          "kind": "playbook",
-          "playbook": "implement-query-service"
-        },
-        {
-          "id": "go-convention/implement-usecase",
-          "version": 1,
-          "kind": "playbook",
-          "playbook": "implement-usecase"
-        },
-        {
-          "id": "go-convention/implement-handler",
-          "version": 1,
-          "kind": "playbook",
-          "playbook": "implement-handler"
-        },
-        {
-          "id": "go-convention/handle-errors",
-          "version": 1,
-          "kind": "playbook",
-          "playbook": "handle-errors"
-        },
-        {
-          "id": "go-convention/write-logs",
-          "version": 1,
-          "kind": "playbook",
-          "playbook": "write-logs"
-        },
-        {
-          "id": "go-convention/apply-go-test-convention",
-          "version": 1,
-          "kind": "playbook",
-          "playbook": "apply-go-test-convention"
-        },
-        {
-          "id": "go-convention/test-domain-model",
-          "version": 1,
-          "kind": "playbook",
-          "playbook": "test-domain-model"
-        },
-        {
-          "id": "go-convention/test-repository",
-          "version": 1,
-          "kind": "playbook",
-          "playbook": "test-repository"
-        },
-        {
-          "id": "go-convention/test-usecase",
-          "version": 1,
-          "kind": "playbook",
-          "playbook": "test-usecase"
-        },
-        {
-          "id": "go-convention/test-handler",
-          "version": 1,
-          "kind": "playbook",
-          "playbook": "test-handler"
-        }
-      ]
+      "contractVersion": 1
     }
   }
 }

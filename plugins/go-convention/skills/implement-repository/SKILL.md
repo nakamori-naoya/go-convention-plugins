@@ -1,9 +1,11 @@
 ---
-name: go-convention-internal-implement-repository
+name: implement-repository
 description: ドメイン層に定義済みの集約の永続化ポート（Repository interface）を、PostgreSQL ＋ pgx/v5 ＋ sqlc で実装する。通常型（FindByID / Create / Update で状態を上書き）とイベント型（FindByID ＋ Apply{Event} でドメインイベントを追記し current 行へ反映）の 2 つの型、ctx の tx に乗る書き方、ドメインと行を往復させる marshaller、DB 制約違反・NotFound・楽観ロック競合の翻訳を定める。「このリポジトリを実装して」「集約の永続化を書いて」「Apply{Event} を実装して」「データモデル資料からリポジトリを起こして」と言われたときに使う。Repository interface の設計、トランザクションを張る側の書き方、一覧・件数・検索の読み取りモデル、DDL とマイグレーション、何をテストするかは対象外として、それぞれの規約へ返す。
 ---
 
 # implement-repository
+
+[工程順序の正本](playbook.yml)を最初に読み、同じagentが\`steps\`を宣言順に実行する。YAMLは工程順序を決め、各工程の判断内容と根拠はこの本文と参照資料を実読して評価する。失敗時は成功扱いせず停止して、完了工程、根拠、未決を残し、再開時は最初の未完了工程から続ける。
 
 これは、**集約の永続化ポートの RDB 実装を、ドメインの値とテーブルの行の往復と、DB が拒んだ事実の翻訳だけで書く規約**である。
 

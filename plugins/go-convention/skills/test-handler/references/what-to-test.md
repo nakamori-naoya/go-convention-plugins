@@ -31,35 +31,34 @@
 | ログの有無・内容 | 書かない | logger は `slog.DiscardHandler`。ログは運用者向けの出力で、公開 API の契約ではない |
 | `Internal` になる経路 | 書かない | 対応表に無い sentinel・tx 無し・取り違えは実装の誤り。テストで期待する Code ではない（SKILL.md の停止条件） |
 
-## 3. ケースの選び方（1 RPC あたり 4〜8）
+## 3. ケースの選び方
 
-| 順 | ケース | 期待 | 数 |
+| 順 | ケース | 期待 | 選択根拠 |
 |---|---|---|---|
-| 1 | 成功 | `wantCode` 0、`wantResp`、`want{Table}` | 1 |
-| 2 | その RPC が返しうる sentinel ごと | sentinel に対応する Code と文言 | sentinel の数（確定なら `ErrHoldDeadlinePassed` / `rdb.ErrNotFound`。`ErrAlreadyConfirmed` 等の状態違いは 1 つ代表で足りる） |
-| 3 | 主体無し | `Unauthenticated`。文言は見ない | 1 |
-| 4 | 他人 | `PermissionDenied`、`ErrNotOwner` の文言 | 1 |
-| 5 | 入力不正 | `InvalidArgument`、値オブジェクトの生成の条件か handler の欠け sentinel の文言 | 1（必須フィールドが複数なら代表 1。確定なら空の予約番号、仮押さえなら `starts_at` の欠け） |
+| 1 | 成功 | `wantCode` 0、`wantResp`、`want{Table}` | 成功時の応答と反映を同じケースで観測する |
+| 2 | その RPC が返しうる sentinel ごと | sentinel に対応する Code と文言 | 到達可能な sentinel の数（確定なら `ErrHoldDeadlinePassed` / `rdb.ErrNotFound` / `ErrAlreadyConfirmed`）。同じ Code でも公開文言を決める sentinel が異なれば別の公開結果として扱う |
+| 3 | 主体無し | `Unauthenticated`。文言は見ない | 主体必須の公開認可経路 |
+| 4 | 他人 | `PermissionDenied`、`ErrNotOwner` の文言 | 所有者と非所有者で結果が分かれる公開認可経路 |
+| 5 | 入力不正 | `InvalidArgument`、値オブジェクトの生成の条件か handler の欠け sentinel の文言 | 異なる変換関数または公開sentinelごと。同じ変換と同じsentinelへ至る値違いは重ねない |
 
 | 規則 | 理由 |
 |---|---|
-| 4 未満なら、認可か入力不正が抜けている | どの RPC も主体を要し、入力を持つ。無いなら書き忘れ |
-| 8 を超えるなら、業務の境界値か usecase の観点を持ち込んでいる | 公開 API の契約は Code の種類の数で決まり、境界値の数では増えない |
 | 同じ Code のケースは sentinel が違うときだけ足す | 同じ sentinel を別の前提で 2 回見ても、対応表の同じ行を 2 回見るだけ |
-| 状態違いの sentinel（確定済み・取消済み・期限切れ）は代表 1 つ | 絞り込み関数の分岐はドメインのテストが全状態を見ている。ここでは「状態違いが `FailedPrecondition` になる」ことが分かれば足りる |
+| 件数ではなく公開結果との対応を調べる | 実装と公開エラー対応表から到達できる sentinel、認可結果、入力変換結果、成功結果を列挙すれば、必要数は対象 RPC ごとに決まる |
 
-題材 `ConfirmReservation` の 6 ケース（[table-shape.md](table-shape.md) §2）:
+題材 `ConfirmReservation` の例（[table-shape.md](table-shape.md) §2）:
 
 | id | 前提 | Code | 文言 |
 |---|---|---|---|
 | `c4e1a8` | 期限前の仮押さえ予約、本人 | 成功 | — |
 | `7d0f2b` | 仮押さえ予約、本人、仮押さえ期限が `now` より前 | `FailedPrecondition` | `reservation.ErrHoldDeadlinePassed` |
+| `d8b72c` | 確定済み予約、本人 | `FailedPrecondition` | `reservation.ErrAlreadyConfirmed` |
 | `e93a61` | 仮押さえ予約、他人 | `PermissionDenied` | `reservation.ErrNotOwner` |
 | `52b7c0` | 予約が無い | `NotFound` | `rdb.ErrNotFound` |
 | `a1d48e` | 空の予約番号 | `InvalidArgument` | `reservation.ErrIDRequired` |
 | `f06c93` | 主体無し | `Unauthenticated` | 見ない（主体注入 interceptor の文言で、公開 API の契約ではない） |
 
-`ErrAlreadyConfirmed`（確定済みの再確定）は、この RPC では `FailedPrecondition` の 2 つ目になるので足していない。足すなら状態違いの代表として 1 つで、7 ケースになる。
+`ErrAlreadyConfirmed` と `ErrHoldDeadlinePassed` は同じ `FailedPrecondition` でも公開文言が異なるため、Code の一致だけを理由にどちらかを省かない。
 
 ## 4. `id` / `name` / `description`
 

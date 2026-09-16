@@ -1,0 +1,33 @@
+version: 2
+name: test-repository
+description: test-repositoryの仕事を同じagentが宣言順に完了する。
+inputs: [request]
+instructions:
+  execution:
+    directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する
+requires: []
+steps:
+  - id: align-source-and-target
+    agent_work: invoking_agent
+    purpose: "資料と対象を揃える"
+  - id: prepare-rdbtest-and-test-main
+    agent_work: invoking_agent
+    purpose: "`rdbtest` と `main_test.go` を用意する"
+  - id: assign-bdd-cases
+    agent_work: invoking_agent
+    purpose: "BDD を割り振る"
+  - id: write-table
+    agent_work: invoking_agent
+    purpose: "表を書く"
+  - id: write-loop
+    agent_work: invoking_agent
+    purpose: "ループ本体を書く"
+  - id: write-omission-comments
+    agent_work: invoking_agent
+    purpose: "末尾コメントを書く"
+  - id: run-structural-checks
+    agent_work: invoking_agent
+    purpose: "機械検査を通す"
+  - id: report
+    agent_work: invoking_agent
+    purpose: "報告する"

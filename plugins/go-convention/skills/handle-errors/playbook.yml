@@ -1,0 +1,30 @@
+version: 2
+name: handle-errors
+description: handle-errorsの仕事を同じagentが宣言順に完了する。
+inputs: [request]
+instructions:
+  execution:
+    directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する
+requires: []
+steps:
+  - id: derive-sentinels
+    agent_work: invoking_agent
+    purpose: "資料の「拒む理由」を集めて sentinel にする"
+  - id: write-messages
+    agent_work: invoking_agent
+    purpose: "文言を書く"
+  - id: decide-return-shape
+    agent_work: invoking_agent
+    purpose: "返す形を決める"
+  - id: decide-wrap-boundaries
+    agent_work: invoking_agent
+    purpose: "包む場所を決める"
+  - id: translate-errors
+    agent_work: invoking_agent
+    purpose: "翻訳する"
+  - id: run-structural-checks
+    agent_work: invoking_agent
+    purpose: "機械検査を通す"
+  - id: report
+    agent_work: invoking_agent
+    purpose: "報告する"

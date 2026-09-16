@@ -1,0 +1,30 @@
+version: 2
+name: implement-handler
+description: implement-handlerの仕事を同じagentが宣言順に完了する。
+inputs: [request]
+instructions:
+  execution:
+    directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する
+requires: []
+steps:
+  - id: map-rpc-usecase
+    agent_work: invoking_agent
+    purpose: "RPC と usecase を 1:1 に対応させる"
+  - id: write-conversions
+    agent_work: invoking_agent
+    purpose: "変換関数を書く"
+  - id: implement-server
+    agent_work: invoking_agent
+    purpose: "server 実装を書く"
+  - id: inspect-interceptors
+    agent_work: invoking_agent
+    purpose: "interceptor を確かめる"
+  - id: connect-composition
+    agent_work: invoking_agent
+    purpose: "組み立てへつなぐ"
+  - id: run-structural-checks
+    agent_work: invoking_agent
+    purpose: "機械で見られる分を通す"
+  - id: report
+    agent_work: invoking_agent
+    purpose: "報告する"

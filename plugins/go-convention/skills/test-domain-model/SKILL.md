@@ -1,9 +1,11 @@
 ---
-name: go-convention-internal-test-domain-model
+name: test-domain-model
 description: 集約・エンティティ・値オブジェクトのテストを、domain-model 資料の「BDDとの対応」表から書く。資料の BDD をその表の要素×操作が指すテスト関数（生成関数・状態型のメソッド・絞り込み関数・値オブジェクトの操作）へ割り振り、Given を Restore* / New* の引数、Then を Next の値・発したイベントの値・sentinel で書き、テストしない BDD はファイル末尾に理由付きで列挙する。「この集約のテストを書いて」「domain-model 資料の BDD からドメインのテストを書いて」「この値オブジェクトの境界をテストして」と言われたときに使う。テストの形の共通規則そのもの、永続化（復元の往復・DB 制約・同時実行）、usecase の手順、RPC の入口は対象外として、それぞれの規約へ返す。
 ---
 
 # test-domain-model
+
+[工程順序の正本](playbook.yml)を最初に読み、同じagentが\`steps\`を宣言順に実行する。YAMLは工程順序を決め、各工程の判断内容と根拠はこの本文と参照資料を実読して評価する。失敗時は成功扱いせず停止して、完了工程、根拠、未決を残し、再開時は最初の未完了工程から続ける。
 
 これは、**ドメインの package（集約・エンティティ・値オブジェクト・ドメインイベント）が資料どおりに判断するかを、メモリ上の値だけで確かめる規約**である。domain-model 資料の「BDDとの対応」表が、どの BDD をどのテスト関数に置くかを決め、テストは資料の gherkin を `id` / `name` / `description` に写し、Given を復元関数と `New*` の引数、Then を遷移の結果（`Next` の値・発したイベントの値・sentinel）で書く。
 
@@ -40,12 +42,12 @@ description: 集約・エンティティ・値オブジェクトのテストを�
 3. **資料のケースを写す。** 割り振った BDD を資料の順に `id`（資料の ID）/ `name`（見出し文）/ `description`（gherkin ブロックを字下げと `NOTE:` 込みで転記）へ写し、Given を `Restore*` / `New*` の引数、When を操作の引数、Then を `wantNext` / `wantEvent` / `wantErr` / `wantOK` / `want` に置く。完了条件: `description` の各行が、フィールドか「別の id が担う行」か「別の層が観測する行」のどれかに振り分けられ、`description` を削っていない
 4. **資料に無いケースを足す。** package の sentinel ごとに 1 つ以上（集約が返さない sentinel を除く）、事前条件の順（複数を同時に破ったとき資料の順で最初の理由が返る）、`(Result, bool)` の `false` 側、VO の拒む組と境界。`id` は生成した id。完了条件: 集約と VO が返しうる sentinel が全部どこかの `wantErr` に現れる
 5. **末尾コメントを書く。** 集約ルートのテストファイル（`reservation_test.go`）の末尾に `// テストしない BDD:` と、`id:` に現れない資料の ID を理由付きで 1 行ずつ。完了条件: 資料の全 ID が `id:` か末尾コメントに現れる
-6. **機械検査を通す。** `CLAUDE_PLUGIN_ROOT` は Claude Code が展開する。Codex では、この `SKILL.md` があるディレクトリの 2 つ上（plugin root）の絶対パスを入れる。完了条件: 全部通る
+6. **機械検査を通す。** `scripts/check-bdd-coverage.py` はこの `SKILL.md` があるディレクトリ直下の tool で、引数は domain-rule 資料とテストのディレクトリ。資料の BDD ID が `id:` か末尾コメントのどちらにも無い、または資料に無い ID を使っていれば、その箇所を 1 行ずつ stdout に出して終了コード 1。資料や `*_test.go` が無ければ stderr に理由を出して終了コード 2。違反が無ければ `違反なし` と終了コード 0。完了条件: 全部通る
    ```bash
    go vet ./<domain package>/...
    go test -shuffle=on -count=1 ./<domain package>/...
    go test -count=1 -run 'TestHold/BDD-001_' ./<domain package>/...   # 足したケースを 1 つずつ単独で
-   python3 "${CLAUDE_PLUGIN_ROOT}/skills/test-domain-model/scripts/check-bdd-coverage.py" <domain-rule 資料.md（### [BDD-NNN] 見出しを持つ資料）> <テストのディレクトリ>
+   python3 scripts/check-bdd-coverage.py <domain-rule 資料.md（### [BDD-NNN] 見出しを持つ資料）> <テストのディレクトリ>
    ```
    テストの形（`id` の一意・順序・`description` の形）の検査は、テストの形の共通規則の検査を別途通す
 7. **報告する。** 下の「報告」の項目
