@@ -12,7 +12,7 @@ bash scripts/validate.sh
 
 ## 配布契約（root 契約と identity）
 
-workspace root の `scripts/validate-plugin-repository.py` で、package 境界の契約（公開・インストール対象がpackage 1件であること、Codex / Claude manifest の同一性、manifestが宣言した直接公開skillの実在、symlink不在）を確認します。workspace root が無い環境では「省略」と表示します。
+兄弟checkout `../harness-tools/tools/validate-plugin-repository.py`（保守toolの唯一の正本）で、package 境界の契約（公開・インストール対象がpackage 1件であること、Codex / Claude manifest の同一性、manifestが宣言した直接公開skillの実在、symlink不在）を確認します。`../harness-tools/` が無い環境では検査を止めます（省略も fixture による代用もしません）。CI は `.github/workflows/validate.yml` で `harness-tools` を兄弟checkoutし、`harness-tools/ci/validate.sh` で local と同じ command を実行します。
 
 続けて、両 marketplace の identity（名前・version・source）が manifest と一致すること、manifest が `skills/` 配下の18skillを直接宣言すること、各directoryの`SKILL.md`とnameが一致することを確認します。各skill直下の`playbook.yml` v2についてidentity、宣言順、`agent_work: invoking_agent`、実値を宣言した場合のneeds/provides接続も正例・負例で確認します。存在確認だけのprepare、外側の単一routing、入口別manifestは検査対象にしません。
 
