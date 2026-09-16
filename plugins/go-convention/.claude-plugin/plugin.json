@@ -1,6 +1,6 @@
 {
   "name": "go-convention",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "Go 1.27 のコーディング・ドメインモデル・永続化・usecase・handler・エラー・ログ・テストの規約と、層ごとのTDD入口を配布する",
   "author": {
     "name": "NaoyaNakamori"
