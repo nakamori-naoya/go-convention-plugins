@@ -11,7 +11,16 @@ description: 永続化層（集約のリポジトリと query service）のテ�
 
 これは、**業務ルールのテストではない**（集約と値オブジェクトが拒む条件はドメインのテストが実 DB 無しで確かめる。集約が拒むシナリオはここに書かず、末尾コメントに理由を残す）。**usecase のテストでもない**（tx 境界・複数集約の協調・入力の解決は usecase のテストの関心）。**テストの形の共通規則でもない**（表の形・`id` / `name` / `description`・`want*` と `wantErr` は共通規則をそのまま使い、ここではこの層で決まる分だけを足す）。**リポジトリの実装規約でもない**（marshaller・sqlc・tx の乗り方は実装の規約が決め、ここでは公開メソッドを通して観測する）。
 
-前提: Go 1.27・PostgreSQL・`github.com/jackc/pgx/v5`・`github.com/sqlc-dev/sqlc`（`sql_package: "pgx/v5"`）・`github.com/ory/dockertest/v4`・`github.com/stretchr/testify`・Docker daemon。入力はデータモデル資料（テーブル定義・「シナリオと記録の対応」・BDD の Before/After の表）、ドメインの実装（集約・`Restore*`・`As*`・sentinel）、リポジトリと query service の実装。例の題材は貸会議室予約 RoomFlow（module `example.com/roomflow`）で、ディレクトリ構成は上位の開発規約が決めるため、例は import path を短くするために平らにしている。
+前提: Go 1.27・PostgreSQL・`github.com/jackc/pgx/v5`・`github.com/sqlc-dev/sqlc`（`sql_package: "pgx/v5"`）・`github.com/ory/dockertest/v4`・`github.com/stretchr/testify`・Docker daemon。入力はデータモデル資料（テーブル定義・「シナリオと記録の対応」・BDD の Before/After の表）、ドメインの実装（集約・`Restore*`・`As*`・sentinel・`Repository` interface）、リポジトリと query service の実装（まだ無ければ、ドメインの `Repository` interface と usecase 側の読み取り契約）。
+
+テストを書く場面は 2 つあり、どちらも通常である。**実装が先にある**場面では、リポジトリ（または query service）の公開メソッドを読んでテストを書く。**テストが先**（実装がまだ無い）場面では、ドメインの `Repository` interface（query service なら usecase 側の読み取りポート）のメソッドと、リポジトリの実装の規約の命名（`NewReservationRepository(q)` の形）からテストを書き、コンパイルエラーまたは未定義シンボルで赤になる状態を正とする。テストは実装ではなく資料と interface から写すので、どちらの場面でも書く内容は同じである。例の題材は貸会議室予約 RoomFlow（module `example.com/roomflow`）で、ディレクトリ構成は上位の開発規約が決めるため、例は import path を短くするために平らにしている。
+
+## 入力
+
+- データモデル資料（テーブル定義・「シナリオと記録の対応」・BDDのBefore/After）の絶対path、ドメインの実装、対象のリポジトリまたはquery serviceの実装。
+- `references`: 追加で従う資料の絶対path配列。任意。手順の最初に読み、以降の判断でこの規約と併せて従う。
+
+プロジェクト固有の規約（置き場、命名、追加で従う資料）は、対象repositoryのAGENTS.md / CLAUDE.mdと`references`で渡される。この入口は既定値を持たず、指示文へ展開もしない。
 
 ## 規約
 
@@ -27,13 +36,13 @@ description: 永続化層（集約のリポジトリと query service）のテ�
 
 ## 手順
 
-1. **資料と対象を揃える。** データモデル資料の「シナリオと記録の対応」と BDD の Before/After、リポジトリ（または query service）の公開メソッドを並べる。完了条件: 資料の全テーブルが列挙され、テーブルごとに `sqlcgen` の行型が 1 つ対応している
+1. **資料と対象を揃える。** `references` があれば先に読む。データモデル資料の「シナリオと記録の対応」と BDD の Before/After、リポジトリ（または query service）の公開メソッド（テストが先なら `Repository` interface または読み取りポートのメソッドと、実装の規約から決めたコンストラクタ名）を並べる。完了条件: 資料の全テーブルが列挙され、テーブルごとに `sqlcgen` の行型が 1 つ対応している
 2. **`rdbtest` と `main_test.go` を用意する。** 無ければ [dockertest-and-testmain.md](references/dockertest-and-testmain.md) §1（`Start`）・§2（`main_test.go`）と [rdbtest.md](references/rdbtest.md) §3・§4 を写し、`sqlc generate` で `Read*` を生成する。完了条件: `go vet ./...` が通り、`rdbtest` に `Start` と資料の全テーブル分の `Seed{Table}` / `Read{Table}` がある
 3. **BDD を割り振る。** 資料の BDD を [what-to-test.md](references/what-to-test.md) §5 の規則でメソッドのテスト関数へ割り振り、集約が拒むものは末尾コメントの候補にする。完了条件: 資料の全 ID が「どの関数に置く」か「書かない理由」のどちらかを持つ
 4. **表を書く。** 資料の順に `id`（資料の ID）/ `name`（見出し文）/ `description`（gherkin ブロックの転記）、`seed{Table}` × 全テーブル（Before）、When の引数、`wantErr`、`want{Table}` × 全テーブル（After）。資料に無いケース（楽観ロック競合・復元・NotFound）を生成した id でその後ろに足す。完了条件: `description` の各行からフィールドの値が説明でき、全ケースが資料の全テーブル分の `want{Table}`（0 行は書かない）を持つ
 5. **ループ本体を書く。** `Reset` → 全 `Seed` → `rdbtest.Run` の中で復元 → 絞り込み → 実物の操作 → 保存 → error の検証 → 全 `Read` → 全 `assert.Equal`。When が 2 件以上のケースがあれば [table-shape.md](references/table-shape.md) §4 の並走の形にする。完了条件: 全テーブルの `Read` と `assert.Equal` が error の分岐の外に 1 回ずつあり、`t.Parallel()` が無い
 6. **末尾コメントを書く。** 資料にあるが書かない BDD を `// テストしない BDD:` に続けて ID と理由で列挙する。完了条件: 資料の全 ID が `id:` か末尾コメントのどちらか一方に現れる
-7. **機械検査を通す。** テストの形の共通規則の機械検査を通した上で、次を実行する。`scripts/check-bdd-coverage.py` はこの `SKILL.md` があるディレクトリ直下の tool で、引数はデータモデル資料とテストのあるディレクトリ。資料の BDD ID が `id:` か末尾コメントのどちらにも無い、または資料に無い ID を使っていれば、その箇所を 1 行ずつ stdout に出して終了コード 1。資料や `*_test.go` が無ければ stderr に理由を出して終了コード 2。違反が無ければ `違反なし` と終了コード 0。違反が出たらテストか末尾コメントを直してから再実行する
+7. **機械検査を通す。** テストの形の共通規則の機械検査を通した上で、次を実行する。テストが先の場面では、`go vet` と `go test` は対象未実装のコンパイルエラーで失敗する。これは赤であり停止ではない。失敗理由が対象未実装であることを確かめ、`check-bdd-coverage.py` とテストの形の検査だけを通し、`go test` の緑は実装後に確かめる。`scripts/check-bdd-coverage.py` はこの `SKILL.md` があるディレクトリ直下の tool で、引数はデータモデル資料とテストのあるディレクトリ。資料の BDD ID が `id:` か末尾コメントのどちらにも無い、または資料に無い ID を使っていれば、その箇所を 1 行ずつ stdout に出して終了コード 1。資料や `*_test.go` が無ければ stderr に理由を出して終了コード 2。違反が無ければ `違反なし` と終了コード 0。違反が出たらテストか末尾コメントを直してから再実行する
    ```bash
    go vet ./...
    go test -count=1 ./rdb/ ./query/
@@ -50,7 +59,7 @@ description: 永続化層（集約のリポジトリと query service）のテ�
 - 資料に登場するテーブルに `sqlcgen` の行型が無い（DDL に無い・sqlc の `schema` に入っていない） → 全テーブルの突き合わせができない。DDL とリポジトリの実装へ返す
 - 資料の不変条件（重なり禁止・一意）が DDL の名前付き制約に無く、拒否を DB で再現できない → 書かない。データモデル資料とリポジトリの実装へ返す
 - 資料の BDD の When が集約の操作に写せない（複数集約にまたがる・別の行為者の操作が混ざる） → 書かない。usecase のテストへ返し、末尾コメントに理由を書く
-- リポジトリが `*pgxpool.Pool` を持ち `rdbtest.Run` の外で動く、または query service が書き込む → テストではなく実装の規約違反。実装の規約へ返す
+- リポジトリが `*pgxpool.Pool` を持ち `rdbtest.Run` の外で動く、または query service が書き込む → テストではなく実装の規約違反。実装の規約へ返す。実装がまだ無いこと自体は止まる理由ではない（テストが先の場面）
 - Docker daemon に接続できない → 起動失敗として落とす。`t.Skip` で通さない
 
 止まるときは、書いた範囲と書かなかった範囲を分け、返す先（資料、実装の規約、利用者）と必要な決定を報告に示す。

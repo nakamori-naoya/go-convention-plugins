@@ -1,6 +1,6 @@
 # go-convention
 
-**Go 1.27 の実装とテストの規約を、関心ごとに分けた 14 の自己完結skillから適用します。** package manifestが`skills/<name>/SKILL.md`を直接公開し、規約の正本は各skill、工程順序の正本は同じdirectoryの`playbook.yml` v2にあります。同じagentが`agent_work: invoking_agent`の工程を宣言順に実行します。
+**Go 1.27 の実装とテストの規約を、関心ごとに分けた 14 の自己完結skillと、層ごとの TDD 入口 4 つから適用します。** package manifestが`skills/<name>/SKILL.md`を直接公開し、規約の正本は各skill、工程順序の正本は同じdirectoryの`playbook.yml` v2にあります。同じagentが`agent_work: invoking_agent`の工程を宣言順に実行します。
 
 ## これは何か／何ではないか
 
@@ -26,12 +26,19 @@
 | `test-repository` | 永続化層（リポジトリ・query service）のテストをデータモデル資料から書く |
 | `test-usecase` | usecase のテストを 5 観点で書く |
 | `test-handler` | handler のテストを本番同等 DI で書く |
+| `develop-domain-model` | ドメイン層の 1 単位（集約または値オブジェクト）を、テスト → 赤 → 実装 → 緑 → 整える の順で完成させる |
+| `develop-repository` | 永続化層の 1 単位（リポジトリまたは query service）を同じ順で完成させる |
+| `develop-usecase` | usecase 1 つを同じ順で完成させる |
+| `develop-handler` | RPC 1 つを同じ順で完成させる（エラーの対応表とログも揃える） |
+
+`develop-<layer>` は `playbook.yml` の `skill:` 工程で同じ package の `test-<layer>` → `implement-<layer>`（永続化層は対象により `implement-repository` / `implement-query-service`）→ `write-go-code`（必要なら `handle-errors` / `write-logs`）を順に呼びます。テストの規約と実装の規約は別 file のままです。
 
 ## 入力
 
 - 対象のパッケージと、書く・直す対象（型・関数・RPC）
 - BDD 資料（domain-rule / domain-model / rdb-logical-data-modeling）があればその絶対パス
 - 既存のコード・テスト（あれば）
+- `references`: 追加で従う資料の絶対パス配列（任意）。プロジェクト固有の規約は対象 repository の AGENTS.md / CLAUDE.md と `references` で渡します
 
 ## 出力
 

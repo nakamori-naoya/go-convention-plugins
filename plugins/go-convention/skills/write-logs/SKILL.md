@@ -22,6 +22,13 @@ description: Go のログを `log/slog` で、最外境界（Connect の interce
 | 属性は snake_case の固定語彙、型付き helper、primitive だけ | 値オブジェクトや集約を `slog.Any` で丸ごと渡す。`msg` に値を埋め込む |
 | 業務上の拒否・NotFound を `Info` にする | 拒否を `Error` にして対応が要る行と混ぜる |
 
+## 入力
+
+- 対象のプロセスと、その最外境界（Connectのinterceptor・workerのsupervisor・外部受信境界）。
+- `references`: 追加で従う資料の絶対path配列。任意。手順の最初に読み、以降の判断でこの規約と併せて従う。
+
+プロジェクト固有の規約（置き場、命名、追加で従う資料）は、対象repositoryのAGENTS.md / CLAUDE.mdと`references`で渡される。この入口は既定値を持たず、指示文へ展開もしない。
+
 ## 規約
 
 | # | 柱 | 一言で | 正本 |
@@ -33,7 +40,7 @@ description: Go のログを `log/slog` で、最外境界（Connect の interce
 
 ## 手順
 
-1. **境界を確かめる。** 対象のプロセスに、最外の interceptor（`handler.Logging`）と worker の supervisor（`worker.Supervise`）があるかを見る。無ければ [middleware.md](references/middleware.md) の形で置き、`handler.NewMux` の interceptor の並びで先頭（最外）にする。既にあるなら足さない。完了条件: RPC 1 回・worker 1 サイクルにつき、記録する場所が 1 か所に決まっている
+1. **境界を確かめる。** `references` があれば先に読む。対象のプロセスに、最外の interceptor（`handler.Logging`）と worker の supervisor（`worker.Supervise`）があるかを見る。無ければ [middleware.md](references/middleware.md) の形で置き、`handler.NewMux` の interceptor の並びで先頭（最外）にする。既にあるなら足さない。完了条件: RPC 1 回・worker 1 サイクルにつき、記録する場所が 1 か所に決まっている
 2. **出したい行が境界へ返るかを問う。** その情報は error 鎖に載って境界へ届くか。届くなら書かない（`return err` で足りる）。届かない（`continue` で飲み込む・再試行の各回・1 件ごとの成功）なら途中ログにする。完了条件: 書く行ごとに [boundaries.md](references/boundaries.md) §4 のどの行に当たるかを言える
 3. **層を確かめる。** 途中ログを書く場所が worker の `Run` か usecase である。リポジトリ・query service・ドメインなら書かず、エラーを返す形に戻す。1 件 1 tx の command は error を返すだけで、ループと途中ログは worker が持つ。完了条件: ドメイン package に `log/slog` の import が無い
 4. **レベルと `msg` と属性を決める。** [severity-and-attributes.md](references/severity-and-attributes.md) の表からレベルを選び、`msg` を定型の日本語 1 文にし、属性を語彙表のキーと型付き helper で書く。語彙に無いキーが要るなら表に足す。完了条件: `msg` に値が無く、属性のキーが全部語彙表にある

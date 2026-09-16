@@ -1,0 +1,68 @@
+# develop-repository — 永続化層の1単位（集約1つのリポジトリ、または読み取り契約1つのquery service）を、
+# テスト → 赤 → 実装 → 緑 → 整える、の順で完成させる合成入口。
+# skill: は同packageの公開入口を宣言順に呼ぶ。呼ばれる入口のSKILL.mdとfileは変えない。
+# 実装の工程は、fix-unitが決めたunit.kind（repository / query_service）に対応する一方だけを実行する。
+version: 2
+name: develop-repository
+description: 永続化層の1単位をTDDの1サイクル（テスト→赤→実装→緑→整える）で同じagentが完成させる。
+inputs: [request, references]
+instructions:
+  execution:
+    directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する。run-redの失敗は赤の観測であり停止ではない
+requires: []
+steps:
+  - id: fix-unit
+    agent_work: invoking_agent
+    purpose: "単位を固定する（リポジトリかquery serviceか、対象、BDD、テストfileと実装file、開始時のテスト結果）"
+    needs: [request]
+    provides: [unit]
+  - id: write-failing-test
+    skill: test-repository
+    purpose: "永続化層のテストの規約を、テストが先の場面として適用し、rdbtestを用意してこの単位のBDDまたは読み取り契約をテストへ写す"
+    needs: [unit]
+    provides: [test_file]
+  - id: run-red
+    agent_work: invoking_agent
+    purpose: "赤を確かめる（対象未実装または資料のAfterと一致しない、以外の失敗が無い）"
+    needs: [unit, test_file]
+    provides: [red_reason]
+  - id: implement-as-repository
+    skill: implement-repository
+    when: unit.kind == repository
+    purpose: "リポジトリの実装の規約で、テストが緑になる最小の実装を書く。テストとrdbtestは触らない"
+    needs: [unit, red_reason]
+    provides: [implementation]
+  - id: implement-as-query-service
+    skill: implement-query-service
+    when: unit.kind == query_service
+    purpose: "query serviceの実装の規約で、テストが緑になる最小の実装を書く。テストとrdbtestは触らない"
+    needs: [unit, red_reason]
+    provides: [query_implementation]
+  - id: run-green
+    agent_work: invoking_agent
+    purpose: "緑を確かめる（対象のテスト、同じpackageの全テスト、テストの規約の機械検査）"
+    needs: [unit, test_file]
+    conditional_needs:
+      - when: unit.kind == repository
+        needs: [implementation]
+      - when: unit.kind == query_service
+        needs: [query_implementation]
+    provides: [green]
+  - id: refactor
+    skill: write-go-code
+    purpose: "言語規約で整える。振る舞いを変えず、テストは触らない"
+    needs: [unit, green]
+    provides: [refactored]
+  - id: align-errors
+    skill: handle-errors
+    when: unit.touched_translation
+    purpose: "この単位でDB制約違反・NotFound・楽観ロック競合の翻訳先を足した・変えたときだけ、エラーの規約で揃える"
+    needs: [unit, refactored]
+    provides: [errors_aligned]
+  - id: report
+    agent_work: invoking_agent
+    purpose: "報告する"
+    needs: [unit, red_reason, green, refactored]
+    conditional_needs:
+      - when: unit.touched_translation
+        needs: [errors_aligned]

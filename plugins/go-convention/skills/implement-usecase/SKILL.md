@@ -13,6 +13,15 @@ description: Go の usecase 層を、command（入力の解決 → tx を張る 
 
 前提: Go 1.27、`github.com/jackc/pgx/v5`（`tx.Manager` の実装が使う。usecase は import しない）。入力はドメインの実装、domain-model 資料、domain-rule 資料、確定済みの論理責務・集約境界を Go package へ写した配置である。例の題材は貸会議室予約 RoomFlow（module `example.com/roomflow`）である。
 
+## 入力
+
+- ドメインの実装、domain-model資料とdomain-rule資料の絶対path、確定済みの論理責務・集約境界を写したGo package配置。
+- `references`: 追加で従う資料の絶対path配列。任意。手順の最初に読み、以降の判断でこの規約と併せて従う。
+
+プロジェクト固有の規約（置き場、命名、追加で従う資料）は、対象repositoryのAGENTS.md / CLAUDE.mdと`references`で渡される。この入口は既定値を持たず、指示文へ展開もしない。
+
+先に赤いテスト（資料の業務イベントと集約の操作から書かれ、usecase が無いために失敗している）がある場面も通常である。そのテストが前提にする型名・`Input` / `Output`・コンストラクタに合わせ、テストを変えずに緑にする実装を書く。テストが資料に無い協調や、ドメインが持つべき判断を usecase に要求していれば、実装で補わずテストと資料へ返す。
+
 ## 規約
 
 | # | 柱 | 一言で | 正本 |
@@ -43,7 +52,7 @@ description: Go の usecase 層を、command（入力の解決 → tx を張る 
 
 ## 手順
 
-1. **usecase を切る。** domain-rule 資料の「業務イベント」1 つ、または「状態と、その移り変わり」の引き金 1 つに command を 1 つ、画面や API が求める一覧・表示 1 つに query を 1 つ置く。名前は資料の業務語。完了条件: usecase 名が資料の業務イベントまたは一覧と 1:1 で、`Create` / `Update` の機械語と `Usecase` 接尾辞が無い
+1. **usecase を切る。** `references` があれば先に読む。domain-rule 資料の「業務イベント」1 つ、または「状態と、その移り変わり」の引き金 1 つに command を 1 つ、画面や API が求める一覧・表示 1 つに query を 1 つ置く。名前は資料の業務語。完了条件: usecase 名が資料の業務イベントまたは一覧と 1:1 で、`Create` / `Update` の機械語と `Usecase` 接尾辞が無い
 2. **Input / Output と、ID・時刻の持ち主を決める。** Input は境界が受け取った primitive（`string` / `time.Time` / `int`）の struct。ID は生成（`Hold`）のときだけ usecase が `IDGenerator` で用意し、時刻は生成も遷移（`Confirm` / `Cancel` / `Expire`）も Input の `At` で受ける（RPC の入口がサーバーの時計で、worker が判定時刻で埋める）。完了条件: Input の各フィールドが VO の `New*` の引数か、操作の引数のどれかに写り、usecase が時計を持たない
 3. **依存を並べる。** command は `*tx.Manager`、ドメインの `Repository`、読み取りポート（usecase 側で定義。DTO を返す）、生成なら `IDGenerator`。query は読み取りポートだけ。コンストラクタは全部を引数で受けて `*T` を返す。完了条件: usecase が自前で切った interface が、読み取りポートと `IDGenerator` だけ
 4. **集約の協調を決める。** 触る集約が 2 つ以上なら domain-model 資料「集約どうしの協働」の「一貫性」を読み、「同じ操作」なら同じ `Run`、「結果整合」ならイベントを受けた別 usecase にする。「集約をまたぐ不変条件」の「守る場所」が「生成を呼ぶ側」なら、その材料を読む読み取りポートを 3 に足す。完了条件: 集約ごとに「同じ tx」か「別 usecase」かが決まり、不変条件ごとに読む材料と返す sentinel が決まっている
