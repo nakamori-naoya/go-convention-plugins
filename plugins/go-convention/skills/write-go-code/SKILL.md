@@ -24,7 +24,7 @@ description: Go 1.27 のコードを、層を問わない言語レベルの規�
 
 | # | 柱 | 一言で | 正本 |
 |---|---|---|---|
-| 1 | 基本 | 明示を選ぶ・丸めない・フォールバックしない・ガード節。返り値は最大 2 つ、naked return 禁止、ctx 第一引数、引数が多いなら struct、値渡し既定、レシーバ統一、フィールド名付きリテラル、`init` 禁止、`main` は `run(ctx) error` | [basics.md](references/basics.md) |
+| 1 | 基本 | 明示を選ぶ・丸めない・フォールバックしない・ガード節。返り値は最大 2 つ、naked return 禁止、ctx 第一引数、引数が多いなら struct、値渡し既定、レシーバ統一、フィールド名付きリテラル、`init` 禁止、`main` は `run(ctx) error`、いまの呼び出しが要らないものを書かない | [basics.md](references/basics.md) |
 | 2 | 命名 | package は短い小文字で `util` / `common` 禁止、getter に `Get` 無し、`Equal`、頭字語は `ID` / `URL`、レシーバ 1〜2 文字、`New` / `Restore`、`Err*`、`{元}To{先}` | [naming.md](references/naming.md) |
 | 3 | 型と interface | interface は使う側で小さく（例外: 永続化ポートと和型はドメインが定義）、`any` は decode 境界だけ、generics は 2 条件、ジェネリックメソッドは既定で使わない、列挙は封じた struct、`default` は error、sealed interface、ゼロ値 | [types-and-interfaces.md](references/types-and-interfaces.md) |
 | 4 | 標準ライブラリ | `min` / `max` / `clear`、`range n`、`slices` / `maps` / `iter`、`strings.Lines` / `SplitSeq` / `CutLast`、UTC、`math/rand/v2`、`os.Root`、`WaitGroup.Go` / `errgroup`、`synctest`、`testing` の 1.24〜1.26 API、`encoding/json/v2` ＋ `jsontext`、`errors.AsType`、`slog.NewMultiHandler` | [stdlib-1.27.md](references/stdlib-1.27.md) |
@@ -37,9 +37,9 @@ description: Go 1.27 のコードを、層を問わない言語レベルの規�
 1. **対象と層を決める。** `references` があれば先に読む。直す・書くファイルと、それがどの層（ドメイン・永続化・query service・usecase・handler・main）かを言う。層固有の形（型の構造・ポート・tx・DTO）は層別の規約に従い、この規約は言語レベルだけを見る。完了条件: 対象ファイルの一覧と、各ファイルの層が 1 行で言える
 2. **`go.mod` とツールを確かめる。** `go 1.27`、`tool` directive、`.golangci.yml` が [tooling.md](references/tooling.md) の形になっている。無ければ先に整える。完了条件: `go tool golangci-lint run ./...` が実行できる
 3. **関数の形を揃える。** 返り値の数、`ctx` の位置、引数の数、値／ポインタ、レシーバ、naked return、ガード節を [basics.md](references/basics.md) に合わせる。既定値への丸め・フォールバックが見つかったら消して `error` を返す形にする（フォールバックが要ると判断した場合は停止条件）。完了条件: 各関数のシグネチャが §基本 の表のどれかに一致し、`else` の入れ子と naked return が無い
-4. **型と interface を揃える。** interface の定義場所（使う側。例外はドメインのポートと和型）、`any` と generics の使用箇所、列挙の形、`switch` の `default` を [types-and-interfaces.md](references/types-and-interfaces.md) に合わせる。完了条件: 各 interface について「誰が使うから誰が定義した」が言え、`default` が全部 `error` を返す
+4. **型と interface を揃える。** interface の定義場所（使う側。例外はドメインのポートと和型）、`any` と generics の使用箇所、列挙の形、`switch` の `default` を [types-and-interfaces.md](references/types-and-interfaces.md) に合わせる。完了条件: 各 interface について「誰が使うから誰が定義した」と「依存方向か差し替えか」が言え、`default` が全部 `error` を返す
 5. **名前を揃える。** package 名、型名、getter、頭字語、レシーバ名、sentinel、変換関数を [naming.md](references/naming.md) に合わせる。完了条件: `go vet` と `staticcheck` の命名の警告が無く、`Get` 接頭辞・`Impl` 接尾辞・`util` package が無い
-6. **標準ライブラリに置き換える。** 自前の補助関数・古い API・`x := x`・`sort.Slice`・`math/rand` v1・`encoding/json` v1 を [stdlib-1.27.md](references/stdlib-1.27.md) の表で置き換える。`go fix ./...` を先に走らせ、残りを手で直す。完了条件: `go fix ./...` が差分を出さず、表の「書かない」列の綴りがコードに無い
+6. **標準ライブラリに置き換える。** 自前の補助関数（同じ module に既にある関数の再実装を含む）・古い API・`x := x`・`sort.Slice`・`math/rand` v1・`encoding/json` v1 を [stdlib-1.27.md](references/stdlib-1.27.md) の表で置き換える。`go fix ./...` を先に走らせ、残りを手で直す。完了条件: `go fix ./...` が差分を出さず、表の「書かない」列の綴りがコードに無く、同じ入出力の関数が module 内に二つ無い
 7. **機械検査を通す。** 完了条件: 次が全部通る
    ```bash
    gofmt -l .                                            # 空
@@ -56,6 +56,7 @@ description: Go 1.27 のコードを、層を問わない言語レベルの規�
 
 - **フォールバックが要ると判断した**（一次手段の失敗時に別の手段で続行しないと要件を満たせない）→ 書かずに止まる。一次手段、失敗の条件、代替手段、続行したときに隠れる失敗を利用者に示し、許可を得てから書く。許可が無ければ `error` を返す形にする
 - 既定値への丸めが「仕様」だと主張されている（「無ければ 0 として扱う」が資料に書いてある）→ 丸めをコードに書かず止まる。資料のその行を示し、`error` を返す形にできないか利用者に確かめる
+- 前提の列挙と層別の規約の指定に無い外部依存が要ると判断した → `go.mod` へ足さずに止まる。標準ライブラリと既存依存で書けない理由、候補と版、依存が増えて背負うもの（更新・脆弱性・ビルド）を利用者に示し、許可を得てから足す
 - `go.mod` が `go 1.27` 未満で上げられない → 書かずに止まる。この規約は 1.27 だけを対象にし、旧版向けに機能を避けて書く経路を持たない
 - 対象が生成コード（`sqlcgen` / `gen/`）→ 直さない。生成元（SQL / proto）を直すことを提案して止まる
 
@@ -87,13 +88,17 @@ description: Go 1.27 のコードを、層を問わない言語レベルの規�
 - [ ] 返り値は `(T, error)` か `(T, bool)` か 1 つ。3 つ以上は結果 struct になっている
 - [ ] `ctx` は第一引数で、struct に持っていない。`context.Background()` / `context.TODO()` が `main` とテスト以外に無い
 - [ ] ポインタは「状態を変える協力者」と「nil が意味を持つ引数」だけ。コンストラクタは値を返している（協力者を除く）
-- [ ] interface は使う側で定義し、呼ぶメソッドだけを持つ。例外はドメインの永続化ポートと和型だけ
+- [ ] interface は使う側で定義し、呼ぶメソッドだけを持つ。例外はドメインの永続化ポートと和型だけ。各 interface に「依存の向きを内向きに保つため」か「テストで差し替えるため（採番・時計など環境で差し替えるもの）」のどちらかの理由が言え、同じ package の具象型や内向きに依存して済む相手を包んだだけの interface が無い
 - [ ] `any` は decode 境界だけ。generics は「同じアルゴリズムを複数の型に」「補助型の量産を避ける」のどちらか。ジェネリックメソッドを使っていない
 - [ ] 列挙は封じた struct。`switch` の `default` は `error` を返し、丸めも `panic` もしていない
 - [ ] `time.Now()` は境界で 1 回。時刻は UTC で保持している
 - [ ] 裸の `go` に「誰が待つか」「いつ止まるか」がある
 - [ ] `encoding/json/v2` を使い、ドメインの型に json タグが無い
 - [ ] package 名に `util` / `common` が無く、getter に `Get` が無く、`Impl` 接尾辞が無い
+- [ ] 標準ライブラリ（`slices` / `maps` / `strings` / `cmp` / `time`）と、同じ module に既にある関数で書ける処理を、自前の関数にしていない
+- [ ] 環境で変わる値（接続先・ポート・鍵・ログの出力先）だけが環境変数で、業務の数・規則・固定の名前は定数になっている
+- [ ] 使われない引数・フィールド、本文が無いか `TODO` だけの関数、いま呼ばれない分岐・オプションが無い
+- [ ] この変更で `go.mod` に外部依存を足していない。足したなら停止条件で許可を得た記録がある
 
 ## 報告
 
