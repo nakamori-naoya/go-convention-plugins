@@ -13,6 +13,13 @@ description: Go 1.27 のコードを、層を問わない言語レベルの規�
 
 前提: Go 1.27（`go.mod` の `go 1.27`）。標準ライブラリを優先し、外部依存は `golang.org/x/sync/errgroup`、`golang.org/x/tools`（goimports）、golangci-lint v2、および層別の規約が指定するもの（`github.com/jackc/pgx/v5`、`github.com/sqlc-dev/sqlc`、`connectrpc.com/connect` v1.21.0（v2 alpha は採らない）、`google.golang.org/protobuf`、`github.com/stretchr/testify`、`github.com/ory/dockertest/v4`）だけ。例の題材は貸会議室予約（module `example.com/roomflow`。ディレクトリ構成は上位の開発規約が決めるので、例は import path を短くするため package を平らに置いている）。
 
+## 入力
+
+- 書く・直す対象のpackageと型・関数、その層。既存のcodeとテストがあればそのpath。
+- `references`: 追加で従う資料の絶対path配列。任意。手順の最初に読み、以降の判断でこの規約と併せて従う。
+
+プロジェクト固有の規約（置き場、命名、追加で従う資料）は、対象repositoryのAGENTS.md / CLAUDE.mdと`references`で渡される。この入口は既定値を持たず、指示文へ展開もしない。
+
 ## 規約
 
 | # | 柱 | 一言で | 正本 |
@@ -27,7 +34,7 @@ description: Go 1.27 のコードを、層を問わない言語レベルの規�
 
 ## 手順
 
-1. **対象と層を決める。** 直す・書くファイルと、それがどの層（ドメイン・永続化・query service・usecase・handler・main）かを言う。層固有の形（型の構造・ポート・tx・DTO）は層別の規約に従い、この規約は言語レベルだけを見る。完了条件: 対象ファイルの一覧と、各ファイルの層が 1 行で言える
+1. **対象と層を決める。** `references` があれば先に読む。直す・書くファイルと、それがどの層（ドメイン・永続化・query service・usecase・handler・main）かを言う。層固有の形（型の構造・ポート・tx・DTO）は層別の規約に従い、この規約は言語レベルだけを見る。完了条件: 対象ファイルの一覧と、各ファイルの層が 1 行で言える
 2. **`go.mod` とツールを確かめる。** `go 1.27`、`tool` directive、`.golangci.yml` が [tooling.md](references/tooling.md) の形になっている。無ければ先に整える。完了条件: `go tool golangci-lint run ./...` が実行できる
 3. **関数の形を揃える。** 返り値の数、`ctx` の位置、引数の数、値／ポインタ、レシーバ、naked return、ガード節を [basics.md](references/basics.md) に合わせる。既定値への丸め・フォールバックが見つかったら消して `error` を返す形にする（フォールバックが要ると判断した場合は停止条件）。完了条件: 各関数のシグネチャが §基本 の表のどれかに一致し、`else` の入れ子と naked return が無い
 4. **型と interface を揃える。** interface の定義場所（使う側。例外はドメインのポートと和型）、`any` と generics の使用箇所、列挙の形、`switch` の `default` を [types-and-interfaces.md](references/types-and-interfaces.md) に合わせる。完了条件: 各 interface について「誰が使うから誰が定義した」が言え、`default` が全部 `error` を返す

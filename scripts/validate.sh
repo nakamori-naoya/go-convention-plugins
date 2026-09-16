@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Scenario: go-conventionが14の自己完結skillを直接配布でき、テストの形の例がコンパイルして通る
-# Given: 両runtimeのmarketplaceと同一のmanifest、直接公開する14のskill（skills/<name>）、
+# Scenario: go-conventionが18の自己完結skill（規約14＋層ごとのTDD入口4）を直接配布でき、テストの形の例がコンパイルして通る
+# Given: 両runtimeのmarketplaceと同一のmanifest、直接公開する18のskill（skills/<name>）、
 #        各skillのreference、check-cases.py、tests/examplesのGoモジュールがある
 # When: root契約（package境界・内部skillの自己完結）、identity、入口と内部skillの対応、reference到達性、例と断片の一致、
-#       check-cases.pyの正常系・正例・負例、shell構文、goのgofmt・vet・shuffleテストを実行する
+#       check-cases.pyの正常系・正例・負例、develop-<layer>のTDD工程順、shell構文、goのgofmt・vet・shuffleテストを実行する
 # Then: 不整合が一つでもあれば非0で終了する。goが無ければgofmt・vet・testは省略と表示し失敗にしない
 set -uo pipefail
 
@@ -54,16 +54,16 @@ else
 fi
 
 if cmp -s "$PLUGIN/.claude-plugin/plugin.json" "$PLUGIN/.codex-plugin/plugin.json" \
-  && jq -e '.name=="go-convention" and (.metadata.harness|has("playbooks")|not) and (.metadata.harness|has("internalPlugins")|not) and (.skills|length)==14 and all(.skills[]; startswith("./skills/"))' "$PLUGIN/.claude-plugin/plugin.json" >/dev/null; then
-  pass "runtime manifestが同一で、14の自己完結skillを直接宣言"
+  && jq -e '.name=="go-convention" and (.metadata.harness|has("playbooks")|not) and (.metadata.harness|has("internalPlugins")|not) and (.skills|length)==18 and all(.skills[]; startswith("./skills/"))' "$PLUGIN/.claude-plugin/plugin.json" >/dev/null; then
+  pass "runtime manifestが同一で、18の自己完結skillを直接宣言"
 else
   fail "runtime manifestの同一性または入口の宣言"
 fi
 
 if PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/scripts/validate_skill_playbooks.py" "$PLUGIN" --self-test; then
-  pass "14公開skillのplaybook.yml v2工程順序契約"
+  pass "18公開skillのplaybook.yml v2工程順序契約"
 else
-  fail "14公開skillのplaybook.yml v2工程順序契約"
+  fail "18公開skillのplaybook.yml v2工程順序契約"
 fi
 
 entry_failed=0
@@ -74,8 +74,8 @@ while IFS= read -r name; do
   done
   [ "$(skill_name "$entry/SKILL.md" 2>/dev/null)" = "$name" ] || { echo "SKILL.md frontmatter nameがdirectoryと一致しない: $name"; entry_failed=1; }
 done < <(jq -r '.skills[] | split("/")[-1]' "$PLUGIN/.claude-plugin/plugin.json")
-[ "$(find "$PLUGIN/skills" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = "14" ] || { echo "公開skillのdirectoryが14でない"; entry_failed=1; }
-[ "$entry_failed" -eq 0 ] && pass "14の自己完結skillを直接公開" || fail "直接公開skillの対応"
+[ "$(find "$PLUGIN/skills" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = "18" ] || { echo "公開skillのdirectoryが18でない"; entry_failed=1; }
+[ "$entry_failed" -eq 0 ] && pass "18の自己完結skillを直接公開" || fail "直接公開skillの対応"
 
 FRONTMATTER_CASES="$TMP_ROOT/frontmatter-cases"
 mkdir -p "$FRONTMATTER_CASES"
@@ -294,6 +294,73 @@ mutated_case "Testと同じidを持つBenchmark（併合しない）" benchmark-
 mutated_case "被験体のidフィールド（ケースと見なさない）" sut-id-ignored accept
 mutated_case "エスケープした引用符を含むname" escaped-quote-name accept
 mutated_case "TestMainだけを持つmain_test.go（Test*として扱わない）" testmain-accepted accept
+
+# develop-<layer>（TDDの1単位）: 同packageの公開入口を skill: で、テスト → 赤 → 実装 → 緑 → 整える の順に呼ぶ
+tdd_order_check() {
+  python3 - "$1" <<'PY3'
+import json, subprocess, sys
+from pathlib import Path
+
+plugin = Path(sys.argv[1])
+manifest = json.loads((plugin / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+public = {Path(s).name for s in manifest["skills"]}
+develop = sorted(name for name in public if name.startswith("develop-"))
+bad = []
+if not develop:
+    bad.append("develop-<layer> の入口が manifest に無い")
+for name in develop:
+    layer = name.removeprefix("develop-")
+    raw = subprocess.run(["yq", "-o=json", "-I=0", ".", str(plugin / "skills" / name / "playbook.yml")], text=True, capture_output=True)
+    if raw.returncode:
+        bad.append(f"{name}: playbook.yml を読めない"); continue
+    steps = json.loads(raw.stdout)["steps"]
+    def index(pred):
+        return next((i for i, s in enumerate(steps) if pred(s)), None)
+    test_i = index(lambda s: s.get("skill") == f"test-{layer}")
+    red_i = index(lambda s: s.get("id") == "run-red" and s.get("agent_work") == "invoking_agent")
+    impl_i = [i for i, s in enumerate(steps) if isinstance(s.get("skill"), str) and s["skill"].startswith("implement-")]
+    green_i = index(lambda s: s.get("id") == "run-green" and s.get("agent_work") == "invoking_agent")
+    refactor_i = index(lambda s: s.get("skill") == "write-go-code")
+    if None in (test_i, red_i, green_i, refactor_i) or not impl_i:
+        bad.append(f"{name}: test-{layer} / run-red / implement-* / run-green / write-go-code の工程が揃っていない"); continue
+    if not (test_i < red_i < min(impl_i) and max(impl_i) < green_i < refactor_i):
+        bad.append(f"{name}: 工程順が テスト → 赤 → 実装 → 緑 → 整える でない")
+    for s in steps:
+        if "skill" in s and s["skill"] not in public:
+            bad.append(f"{name}: skill: {s['skill']} は同packageの公開入口でない")
+        if "skill" in s and s["skill"] == "apply-go-test-convention":
+            bad.append(f"{name}: テストの形の共通規約は test-<layer> が土台にするので合成入口から呼ばない")
+if bad:
+    print("\n".join(bad)); raise SystemExit(1)
+PY3
+}
+if tdd_order_check "$PLUGIN"; then
+  pass "develop-<layer>: test-<layer> → run-red → implement-* → run-green → write-go-code の順で同package公開入口を skill: で呼ぶ"
+else
+  fail "develop-<layer> のTDD工程順"
+fi
+TDD_MUT="$TMP_ROOT/tdd-mut"
+tdd_mutated() {
+  local label=$1 expect=$2 py=$3
+  rm -rf "$TDD_MUT"; mkdir -p "$TDD_MUT"; cp -R "$PLUGIN/." "$TDD_MUT/"
+  python3 -c "$py" "$TDD_MUT/skills/develop-domain-model/playbook.yml"
+  if tdd_order_check "$TDD_MUT" >/dev/null 2>&1; then
+    [ "$expect" = accept ] && pass "develop-<layer> 検査が${label}を受理" || fail "develop-<layer> 検査が${label}を受理した"
+  else
+    [ "$expect" = reject ] && pass "develop-<layer> 検査が${label}を拒否" || fail "develop-<layer> 検査が${label}を拒否した"
+  fi
+}
+tdd_mutated "現行の develop-domain-model（正例）" accept 'import sys'
+tdd_mutated "実装工程がテスト工程より前（反例）" reject 'import sys,pathlib
+p=pathlib.Path(sys.argv[1]); t=p.read_text(); a="skill: test-domain-model"; b="skill: implement-domain-model"; p.write_text(t.replace(a,"@@").replace(b,a).replace("@@",b))'
+tdd_mutated "run-red 工程の欠落（反例）" reject 'import sys,pathlib
+p=pathlib.Path(sys.argv[1]); t=p.read_text(); p.write_text(t.replace("id: run-red","id: run-first"))'
+tdd_mutated "整える工程が緑の前（境界例: 工程は揃うが順序だけ違う）" reject 'import sys,pathlib,json,subprocess
+p=pathlib.Path(sys.argv[1]); v=json.loads(subprocess.run(["yq","-o=json","-I=0",".",str(p)],text=True,capture_output=True).stdout)
+s=v["steps"]; g=next(i for i,x in enumerate(s) if x["id"]=="run-green"); r=next(i for i,x in enumerate(s) if x["id"]=="refactor")
+s[g],s[r]=s[r],s[g]; s[g].pop("needs",None); s[r].pop("needs",None); p.write_text(json.dumps(v,ensure_ascii=False))'
+tdd_mutated "テストの形の共通規約を合成入口から呼ぶ（反例）" reject 'import sys,pathlib
+p=pathlib.Path(sys.argv[1]); t=p.read_text(); p.write_text(t.replace("skill: write-go-code","skill: apply-go-test-convention"))'
 
 syntax_failed=0
 while IFS= read -r script; do bash -n "$script" || syntax_failed=1; done < <(find "$ROOT/plugins" "$ROOT/scripts" -type f -name '*.sh' | sort)

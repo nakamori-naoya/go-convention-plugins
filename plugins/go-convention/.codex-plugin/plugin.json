@@ -1,7 +1,7 @@
 {
   "name": "go-convention",
   "version": "2.0.0",
-  "description": "Go 1.27 のコーディング・ドメインモデル・永続化・usecase・handler・エラー・ログ・テストの規約を配布する",
+  "description": "Go 1.27 のコーディング・ドメインモデル・永続化・usecase・handler・エラー・ログ・テストの規約と、層ごとのTDD入口を配布する",
   "author": {
     "name": "NaoyaNakamori"
   },
@@ -19,7 +19,11 @@
     "./skills/test-domain-model",
     "./skills/test-repository",
     "./skills/test-usecase",
-    "./skills/test-handler"
+    "./skills/test-handler",
+    "./skills/develop-domain-model",
+    "./skills/develop-repository",
+    "./skills/develop-usecase",
+    "./skills/develop-handler"
   ],
   "interface": {
     "displayName": "Go Convention",

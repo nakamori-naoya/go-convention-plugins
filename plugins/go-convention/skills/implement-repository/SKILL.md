@@ -13,6 +13,15 @@ description: ドメイン層に定義済みの集約の永続化ポート（Repo
 
 前提: Go 1.27、PostgreSQL、`github.com/jackc/pgx/v5`（`pgxpool` / `pgtype` / `pgconn`）、`github.com/sqlc-dev/sqlc`（`sql_package: "pgx/v5"`）。入力はドメインの実装（集約・VO・`Repository` interface・sentinel）とデータモデル資料（テーブル定義と「シナリオと記録の対応」）。例の題材は貸会議室予約 RoomFlow（module `example.com/roomflow`）で、ディレクトリ構成は上位の開発規約が決めるため、例は import path を短くするために平らにしている。
 
+## 入力
+
+- ドメインの実装（集約・VO・`Repository` interface・sentinel）と、データモデル資料（rdb-logical-data-modeling）の絶対path。
+- `references`: 追加で従う資料の絶対path配列。任意。手順の最初に読み、以降の判断でこの規約と併せて従う。
+
+プロジェクト固有の規約（置き場、命名、追加で従う資料）は、対象repositoryのAGENTS.md / CLAUDE.mdと`references`で渡される。この入口は既定値を持たず、指示文へ展開もしない。
+
+先に赤いテスト（データモデル資料と `Repository` interface から書かれ、実装が無いために失敗している）がある場面も通常である。そのテストが前提にするコンストラクタ名と interface のメソッドに合わせ、テストと `rdbtest` を変えずに緑にする実装を書く。テストが資料に無いテーブル・列・翻訳を要求していれば、実装で補わずテストと資料へ返す。
+
 ## 規約
 
 | # | 柱 | 一言で | 正本 |
@@ -25,7 +34,7 @@ description: ドメイン層に定義済みの集約の永続化ポート（Repo
 
 ## 手順
 
-1. **型を決める。** データモデル資料のテーブル一覧を読み、`{aggregate}_base_events` と詳細イベント表があればイベント型、無ければ通常型にする。ドメインの `Repository` interface がその型の形（`Apply{Event}` か `Create` / `Update` か）と一致していることを確かめる。完了条件: 集約 1 つに型が 1 つ決まり、実装するメソッドが interface のメソッドと 1:1 で列挙されている
+1. **型を決める。** `references` があれば先に読む。データモデル資料のテーブル一覧を読み、`{aggregate}_base_events` と詳細イベント表があればイベント型、無ければ通常型にする。ドメインの `Repository` interface がその型の形（`Apply{Event}` か `Create` / `Update` か）と一致していることを確かめる。完了条件: 集約 1 つに型が 1 つ決まり、実装するメソッドが interface のメソッドと 1:1 で列挙されている
 2. **テーブル操作を表にする。** 資料の「シナリオと記録の対応」から、メソッドごとに各テーブルへの INSERT / UPDATE / DELETE を書き出す。イベント型は 1. current 行（初回は INSERT、以後は楽観ロック付き UPDATE）2. 従属行 3. 基底イベント 4. 詳細イベント の順に並べる。完了条件: 資料の表の各行が、どれか 1 つのメソッドの手順に写っている
 3. **query を書き、生成する。** `rdb/query/{aggregate}.sql` に 2 の操作分の query を `{Get|Insert|Update|Delete}{Table}` で書き、`sqlc generate` で `rdb/sqlcgen` を更新する。楽観ロックの UPDATE は `:execrows`、基底イベントは `RETURNING id` の `:one`。完了条件: 生成が通り、メソッドが使う query がすべて 1 ファイルにあり、テスト用の query が混ざっていない
 4. **marshaller を書く。** `rdb/{aggregate}_marshaller.go` に、ドメイン → Params（イベントまたは状態型ごと）と、行 → 集約（`status` で `Restore*` を選ぶ）を `{元}To{先}` で書く。`status` / `event_type` / `actor_code` の定数もここに置く。完了条件: 行 → ドメインが `New*` と `Restore*` だけを呼び、ドメイン → 行が getter だけを読み、`time.Now()` と `pgtype` の型がドメイン側に現れない

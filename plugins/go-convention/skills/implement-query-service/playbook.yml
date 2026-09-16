@@ -1,7 +1,7 @@
 version: 2
 name: implement-query-service
 description: implement-query-serviceの仕事を同じagentが宣言順に完了する。
-inputs: [request]
+inputs: [request, references]
 instructions:
   execution:
     directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する

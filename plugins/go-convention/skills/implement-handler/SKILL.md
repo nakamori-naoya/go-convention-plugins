@@ -24,6 +24,15 @@ description: Connect-RPC（connectrpc.com/connect ＋ protobuf）の入口を Go
 | interceptor: 最外が recover・ログ 1 回・翻訳、内側が認証と主体の記録 | 認証を server 実装の各メソッドに書く。翻訳表を RPC ごとに持つ |
 | `main` は `run(ctx) error` を呼んで `os.Exit`。`run` は環境で変わるもの（`Deps`）を作り、`NewMux(Deps)` が tx・リポジトリ・query service・usecase・server・interceptor 列を内側から外側へ全部組み立てる | グローバル変数と `init` で依存を持つ。`run` の外で接続を開く。usecase やリポジトリを `run` で組む |
 
+## 入力
+
+- protoと生成code、対象のRPC、呼ぶusecaseの型と`Execute`の入出力。
+- `references`: 追加で従う資料の絶対path配列。任意。手順の最初に読み、以降の判断でこの規約と併せて従う。
+
+プロジェクト固有の規約（置き場、命名、追加で従う資料）は、対象repositoryのAGENTS.md / CLAUDE.mdと`references`で渡される。この入口は既定値を持たず、指示文へ展開もしない。
+
+先に赤いテスト（proto と usecase の入出力、資料の拒む理由から書かれ、server メソッド・変換関数・対応表の行が無いために失敗している）がある場面も通常である。そのテストが前提にする組み立て関数の形・`wantCode`・公開文言に合わせ、テストを変えずに緑にする実装を書く。テストが usecase に無い入出力や資料に無い拒む理由を要求していれば、実装で補わずテストと資料へ返す。
+
 ## 規約
 
 | # | 柱 | 一言で | 正本 |
@@ -37,7 +46,7 @@ description: Connect-RPC（connectrpc.com/connect ＋ protobuf）の入口を Go
 
 ## 手順
 
-1. **RPC と usecase を 1:1 に対応させる。** proto の `service` にある RPC を列挙し、それぞれが呼ぶ usecase（`usecase.ConfirmReservation` 等）と入力型・出力型を指す。usecase が無い RPC、2 つの usecase が要る RPC があれば停止条件へ。完了条件: RPC ごとに usecase の型名と `Execute` の入出力が 1 行で書けている
+1. **RPC と usecase を 1:1 に対応させる。** `references` があれば先に読む。proto の `service` にある RPC を列挙し、それぞれが呼ぶ usecase（`usecase.ConfirmReservation` 等）と入力型・出力型を指す。usecase が無い RPC、2 つの usecase が要る RPC があれば停止条件へ。完了条件: RPC ごとに usecase の型名と `Execute` の入出力が 1 行で書けている
 2. **変換関数を書く。** [dto-mapping.md](references/dto-mapping.md) の形で、要求 → 入力（`confirmRequestToInput`）と出力 → 応答（`holdOutputToResponse`）を handler package に置く。必須の Timestamp は `IsValid` で確かめ、欠けていれば handler の公開 sentinel を返す。操作の時刻は引数 `at` で受けて `At` に載せる。完了条件: 関数が proto の型・usecase の型・`time.Time` だけを引数・返り値に持ち、ドメインの型と `time.Now()` が現れない
 3. **server 実装を書く。** [connect-server.md](references/connect-server.md) の形で `ReservationServer` のメソッドを書く。本体は「`callerFrom` → 変換（`s.clock.Now()` を 1 回渡す）→ `Execute` → `connect.NewResponse`」で、error はそのまま返す。完了条件: メソッドに `connect.NewError`・`slog`・`errors.Is`・`tx`・`time.Now()`・リポジトリの呼び出しが無い
 4. **interceptor を確かめる。** `Logging` と `Auth` が [interceptors.md](references/interceptors.md) の形で handler package にあるかを見る。無ければ置く。あれば足さない。翻訳表 `codeTable` に、この RPC が新しく返しうる sentinel（handler の欠け sentinel、読み取り RPC なら `query` の sentinel を含む）の行があるかを見る。完了条件: `connect.NewError` を書いているファイルが interceptor と翻訳表のファイルだけ

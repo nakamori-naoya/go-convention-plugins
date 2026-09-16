@@ -14,7 +14,21 @@ bash scripts/validate.sh
 
 workspace root の `scripts/validate-plugin-repository.py` で、package 境界の契約（公開・インストール対象がpackage 1件であること、Codex / Claude manifest の同一性、manifestが宣言した直接公開skillの実在、symlink不在）を確認します。workspace root が無い環境では「省略」と表示します。
 
-続けて、両 marketplace の identity（名前・version・source）が manifest と一致すること、manifest が `skills/` 配下の14skillを直接宣言すること、各directoryの`SKILL.md`とnameが一致することを確認します。各skill直下の`playbook.yml` v2についてidentity、宣言順、`agent_work: invoking_agent`、実値を宣言した場合のneeds/provides接続も正例・負例で確認します。存在確認だけのprepare、外側の単一routing、入口別manifestは検査対象にしません。
+続けて、両 marketplace の identity（名前・version・source）が manifest と一致すること、manifest が `skills/` 配下の18skillを直接宣言すること、各directoryの`SKILL.md`とnameが一致することを確認します。各skill直下の`playbook.yml` v2についてidentity、宣言順、`agent_work: invoking_agent`、実値を宣言した場合のneeds/provides接続も正例・負例で確認します。存在確認だけのprepare、外側の単一routing、入口別manifestは検査対象にしません。
+
+## develop-<layer>（TDD の 1 単位）の工程順
+
+```text
+正本: manifest の skills（同 package の公開入口の集合）と、develop-<layer> の隣接 playbook.yml
+入力: plugins/go-convention/.claude-plugin/plugin.json、skills/develop-*/playbook.yml
+正規化: playbook.yml は yq v4 で JSON 化し、steps を宣言順の list として読む
+合格述語: develop-<layer> が 1 つ以上あり、各 playbook で `skill: test-<layer>` → `id: run-red`（agent_work）→ `skill: implement-*`（1 つ以上）→ `id: run-green`（agent_work）→ `skill: write-go-code` がこの順に現れる。`skill:` の値はすべて manifest の公開入口で、`apply-go-test-convention` を呼ばない
+失敗時の診断: 入口名と、欠けた工程または順序違反、公開入口でない skill 名
+正例: 現行の develop-domain-model
+反例: 実装工程がテスト工程より前、run-red の欠落、apply-go-test-convention を合成入口から呼ぶ
+境界例: 工程は揃うが write-go-code が run-green より前（順序だけの違反）は不合格
+意味評価として残す範囲: 赤の理由の分類が正しいか、実装中にテストを変えていないか、整える前後で振る舞いが同じか、資料の BDD を超えるテストが無いか
+```
 
 ## 規約の資料と例
 

@@ -13,6 +13,15 @@ description: usecase（command / query）のテストを、実 DB（dockertest �
 
 前提: Go 1.27、`github.com/stretchr/testify`、`github.com/jackc/pgx/v5`（`pgxpool` / `pgtype`）、`github.com/ory/dockertest/v4`（起動は永続化層のテスト支援 `rdbtest.Start` が担い、usecase のテストは `TestMain` から呼ぶだけ）、sqlc（`sql_package: "pgx/v5"`）が生成した行の型 `sqlcgen.*`。テストの形（無名 struct のテーブル・`id` / `name` / `description`・`want*` / `wantErr`・`require` / `assert`）はテストの形の共通規則に従い、この skill はその上に usecase 固有の形を足す。題材は貸会議室予約 RoomFlow（module `example.com/roomflow`）で、ディレクトリ構成は上位の開発規約が決めるため、例は import path を短くするために `reservation` / `rdb` / `query` / `tx` / `usecase` と平らにしている。
 
+テストを書く場面は 2 つあり、どちらも通常である。**実装が先にある**場面では、`Execute` を読んで 5 観点に分ける。**テストが先**（usecase がまだ無い）場面では、資料の業務イベント（または一覧）と、呼ぶ集約の操作・ポートから、usecase の実装の規約の形（command は 入力の解決 → tx → 復元または生成 → 絞り込み → 操作 → 保存、query は 読み取りポート → DTO）で `Execute` の手順を予定し、その手順を読んで 5 観点に分ける。usecase の型名・`Input` / `Output`・コンストラクタは実装の規約の命名で決め、コンパイルエラーまたは未定義シンボルで赤になる状態を正とする。
+
+## 入力
+
+- 対象のusecase（`Execute`）と、永続化層のテスト支援（`rdbtest`）、資料（domain-rule / domain-model）の絶対path。
+- `references`: 追加で従う資料の絶対path配列。任意。手順の最初に読み、以降の判断でこの規約と併せて従う。
+
+プロジェクト固有の規約（置き場、命名、追加で従う資料）は、対象repositoryのAGENTS.md / CLAUDE.mdと`references`で渡される。この入口は既定値を持たず、指示文へ展開もしない。
+
 ## 規約
 
 | # | 柱 | 一言で | 正本 |
@@ -25,8 +34,8 @@ description: usecase（command / query）のテストを、実 DB（dockertest �
 
 ## 手順
 
-1. **usecase の `Execute` を読み、5 観点に分ける。** 入力解決（primitive → VO、期間 → 範囲）、協調（別の集約・別のインスタンスの何を読み、何を変えるか）、ソース選択（入力で読む先が変わるか）、tx 境界（`Run` の中で書くテーブル）、呼び分け（復元 → 絞り込み → 操作 → `Apply*` / `Create` / `Update`、`(Result, bool)` の false）を列挙する。完了条件: `Execute` の各行がどれかの観点に割り当てられ、どれにも割り当てられない行（状態の判定・件数の解釈・計算）が無い
-2. **ケースを決める。** 対象実装を読み、観点ごとに相異なる配線分岐を列挙して、それぞれの Given（前提の行）・When（`in`・`ids`）・Then（`wantErr` / `want` / `want{Table}`）を業務語で書く。1 ケースが複数観点を区別できるなら兼ねる。tx 境界の rollback は「途中の書き込みを DB 制約で失敗させる前提」を先に決める。完了条件: 列挙した各配線分岐が少なくとも 1 ケースで観測でき、各ケースの `name` から観点が読める。書かない観点の表に当たるケースと、同じ結果経路へ入力値だけを変えた重複が無い
+1. **usecase の `Execute` を読み、5 観点に分ける。** `references` があれば先に読む。テストが先なら、実装の代わりに予定した手順を読む。入力解決（primitive → VO、期間 → 範囲）、協調（別の集約・別のインスタンスの何を読み、何を変えるか）、ソース選択（入力で読む先が変わるか）、tx 境界（`Run` の中で書くテーブル）、呼び分け（復元 → 絞り込み → 操作 → `Apply*` / `Create` / `Update`、`(Result, bool)` の false）を列挙する。完了条件: `Execute` の各行がどれかの観点に割り当てられ、どれにも割り当てられない行（状態の判定・件数の解釈・計算）が無い
+2. **ケースを決める。** 対象実装（テストが先なら予定した手順）を読み、観点ごとに相異なる配線分岐を列挙して、それぞれの Given（前提の行）・When（`in`・`ids`）・Then（`wantErr` / `want` / `want{Table}`）を業務語で書く。1 ケースが複数観点を区別できるなら兼ねる。tx 境界の rollback は「途中の書き込みを DB 制約で失敗させる前提」を先に決める。完了条件: 列挙した各配線分岐が少なくとも 1 ケースで観測でき、各ケースの `name` から観点が読める。書かない観点の表に当たるケースと、同じ結果経路へ入力値だけを変えた重複が無い
 3. **`main_test.go` を確かめる。** package に無ければ `TestMain` を 1 点だけ書く（[setup.md](references/setup.md) §3）。あれば足さない。完了条件: `TestMain` がこの package に 1 つで、`main_test.go` にあるのは `pool`（または `*rdbtest.DB`）・`TestMain`・起動と組み立てを支える関数だけ
 4. **表とループ本体を書く。** ファイルは usecase の実装ファイルと 1 対 1（`confirm_reservation.go` ↔ `confirm_reservation_test.go`）、テスト関数は `Test{Usecase}_Execute`。ループ本体は `Reset` → `Seed*` → 本番と同じコンストラクタで DI → `Execute` → `wantErr` / `want` → `Read{Table}` と `want{Table}` の突き合わせ、の 1 回。完了条件: ループ本体にケースを選り分ける分岐が無く、`t.Parallel()` が無く、テスト本文に SQL と集約の組み立てが無い
 5. **足りないテスト支援を返す。** 必要な `Seed{Table}` / `Read{Table}` が `rdbtest` に無い、`IDGenerator` の固定実装が無い、途中失敗を起こす制約が DDL に無い —— いずれもテスト本文で代用せず、永続化層のテスト支援・usecase の実装・データモデルの各規約へ返す。完了条件: テスト本文に置いた回避策が無い
@@ -36,7 +45,7 @@ description: usecase（command / query）のテストを、実 DB（dockertest �
    go test -count=1 ./usecase/...
    go test -count=1 -run 'TestConfirmReservation_Execute/9f1c2a_' ./usecase/...   # 足したケースを 1 つずつ単独で
    ```
-   テストの形の共通規則が機械検査（`id` / `name` / `description` の形）を持つなら、それも通す。完了条件: すべて通り、Docker が無いときは skip ではなく失敗として現れる
+   テストの形の共通規則が機械検査（`id` / `name` / `description` の形）を持つなら、それも通す。テストが先の場面では、`go vet` と `go test` は対象未実装のコンパイルエラーで失敗する。これは赤であり停止ではない。失敗理由が対象未実装であることを確かめ、テストの形の検査だけを通し、`go test` の緑は実装後に確かめる。完了条件: すべて通り（テストが先なら、失敗理由が対象未実装だけ）、Docker が無いときは skip ではなく失敗として現れる
 7. **報告する。** 「報告」の項目を返す
 
 ## 停止条件
@@ -44,7 +53,7 @@ description: usecase（command / query）のテストを、実 DB（dockertest �
 止まるのは、資料または規約の契約に反する要求、正本に無い決定が要る、利用者の許可が要る、toolが失敗した、のどれかに当たるときで、それ以外の判断の揺れでは止まらない。欠けているのが業務事実（操作・状態・拒む理由・資料が未決と明示した値）なら止まり、命名・分割・定義場所・並び・テストの置き場のような設計判断の揺れなら仮説を明示して進む。
 
 - 書きたいケースが 5 観点のどれにも当たらない（VO の境界値・状態違いの網羅・全カラム・エラーコード・権限） → 書かない。どの層の責務かを [five-viewpoints.md](references/five-viewpoints.md) §3 の表で示して返す
-- usecase が業務判断（`Status()` の判定・件数の解釈・計算）を持っていて、その分岐を書かないとテストが通らない → テストを書かず、判断をドメインへ移すよう usecase の実装の規約へ返す
+- usecase が業務判断（`Status()` の判定・件数の解釈・計算）を持っていて、その分岐を書かないとテストが通らない → テストを書かず、判断をドメインへ移すよう usecase の実装の規約へ返す。usecase がまだ無いこと自体は止まる理由ではない（テストが先の場面）
 - usecase が `time.Now()` を呼んでいる（時刻は入力 `At` で受ける）、または採番を直接呼んでいて `IDGenerator` で固定できない → 書かずに usecase の実装の規約へ返す。テストで時刻を待たない・ID を正規表現で見ない
 - tx 境界の rollback を起こす前提が DB 制約で作れない（途中で失敗する書き込みが無い） → mock で失敗を注入しない。DDL の制約かデータモデル資料へ返し、rollback ケースは書かずに報告へ載せる
 - `rdbtest` に必要な `Seed{Table}` / `Read{Table}` / `Reset` が無い → テスト本文に SQL を書かず、永続化層のテスト支援への追加を返す

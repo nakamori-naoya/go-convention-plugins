@@ -1,6 +1,6 @@
 # Go Convention Plugins
 
-Go 1.27 の実装とテストの規約を関心ごとに分けて配布する、Claude Code / Codex 両対応の marketplace です。公開 package は `go-convention` 1 件で、14 の自己完結skill（[plugin README](plugins/go-convention/README.md) の表）をpackage manifestから直接公開します。規約の正本は各skillの `SKILL.md` と `references/`、工程順序の正本は各skill直下の`playbook.yml` v2です。
+Go 1.27 の実装とテストの規約を関心ごとに分けて配布する、Claude Code / Codex 両対応の marketplace です。公開 package は `go-convention` 1 件で、18 の自己完結skill（規約 14 と層ごとの TDD 入口 4。[plugin README](plugins/go-convention/README.md) の表）をpackage manifestから直接公開します。規約の正本は各skillの `SKILL.md` と `references/`、工程順序の正本は各skill直下の`playbook.yml` v2です。
 
 ## こんなときに使う
 
@@ -10,6 +10,7 @@ Go 1.27 の実装とテストの規約を関心ごとに分けて配布する、
 - データモデル資料の BDD を、復元 → 操作 → 保存で全テーブル突き合わせるリポジトリテストにしたい
 - 資料の `BDD-NNN` をそのまま `id` にしたテーブル駆動テストを書きたい
 - エラーの sentinel と `connect.Code` の翻訳、interceptor で 1 回だけ出すログを揃えたい
+- 集約・リポジトリ・usecase・RPC を 1 単位ずつ、テストを先に赤で置いて実装で緑にし、整えるまでを 1 サイクルで進めたい（TDD）
 
 ## 利用例
 
@@ -23,6 +24,10 @@ Go 1.27 の実装とテストの規約を関心ごとに分けて配布する、
 
 ```text
 このリポジトリのテストを rdb-logical-data-modeling 資料の BDD から書いて。全テーブルを突き合わせて。
+```
+
+```text
+この集約を TDD で実装して。テストを先に赤で置いてから実装して、整えるところまで。
 ```
 
 ## インストール
@@ -84,7 +89,9 @@ marketplace の取得と、インストール済みパッケージの更新は�
 
 ## 配布する plugin
 
-- `go-convention`: 14 の入口（Go package 配置・コーディング・ドメインモデル・リポジトリ・query service・usecase・handler・エラー・ログ・テストの形・ドメインモデルのテスト・永続化層のテスト・usecase のテスト・handler のテスト）
+- `go-convention`: 18 の入口（Go package 配置・コーディング・ドメインモデル・リポジトリ・query service・usecase・handler・エラー・ログ・テストの形・ドメインモデルのテスト・永続化層のテスト・usecase のテスト・handler のテスト、および層ごとの TDD 入口 `develop-domain-model` / `develop-repository` / `develop-usecase` / `develop-handler`）
+
+`develop-<layer>` の 4 入口は、`development-convention` package の `develop-inside-out`（言語非依存の ATDD 工程: 一場面の受け入れテストを先に赤で置き、内側の層から外側へゲートを通して進める）の各層を Go で実装するときの 1 単位です。`develop-inside-out` が層の順序とゲートを決め、`develop-<layer>` がその層の中を「テスト → 赤 → 実装 → 緑 → 整える」で完成させます。テストの規約（`test-<layer>`）と実装の規約（`implement-<layer>`）は別 file のまま、`develop-<layer>` の `playbook.yml` がそれらを順に呼びます。
 
 利用契約は [plugin README](plugins/go-convention/README.md) を参照してください。決定の経緯は [decisions/go-convention-plugins.jsonl](decisions/go-convention-plugins.jsonl) にあります。テストの形の実例は [tests/examples/](tests/examples/) にあり、[examples.md](plugins/go-convention/skills/apply-go-test-convention/references/examples.md) と同一のコードです。
 
