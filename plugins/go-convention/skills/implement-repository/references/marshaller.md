@@ -110,8 +110,8 @@ func reservationRowToReservation(res sqlcgen.Reservation, deadline *sqlcgen.Tent
 | `status` の値で `Restore*` を選ぶ。未知の値は error | 状態型は sealed で、文字列から型を選ぶのはここ 1 か所。既定の状態へ丸めない |
 | 時刻は `Restore*` / `New*` に渡す直前に `.UTC()` を通す | pgx が返す `time.Time` は Local を持つ。`New*` が正規化するかに関わらず一律に UTC にし、`==` で比べられる値にする |
 | 文脈はここで足さない。呼び手（`FindByID`）が `fmt.Errorf("予約 %s の復元: %w", ...)` で 1 回足す | 各 `New*` の error に個別の文脈を足すと、同じ ID が何段にも重なる |
-| イベント型の復元は current 行（`reservations` と従属行）が正本 | `reservation_base_events` を読んで畳み込まない。current 行に `current_version` があり、イベントの再生は要らない |
-| 「起きたかどうか」を表す値は、資料の流儀（全列 NOT NULL）に従い current 行の NULL 列にせず、イベント表の有無で持つ。無ければゼロ値を `Restore*` に渡す | 無断不利用の時刻は `reservation_no_show_recorded_events`（資料に無い仮定の 9 表目）を基底イベントと JOIN した `occurred_at` が正本。2 件以上はデータ破損（集約が 1 回しか記録しない）なので error にし、先頭で丸めない |
+| イベント型の復元は current 行（`reservations` と従属行）が正式な定義 | `reservation_base_events` を読んで畳み込まない。current 行に `current_version` があり、イベントの再生は要らない |
+| 「起きたかどうか」を表す値は、資料の流儀（全列 NOT NULL）に従い current 行の NULL 列にせず、イベント表の有無で持つ。無ければゼロ値を `Restore*` に渡す | 無断不利用の時刻は `reservation_no_show_recorded_events`（資料に無い仮定の 9 表目）を基底イベントと JOIN した `occurred_at` が一次データ。2 件以上はデータ破損（集約が 1 回しか記録しない）なので error にし、先頭で丸めない |
 | 非ルートエンティティは、`:many` で集めた子行を VO の `New*` に通し、ルートの `Restore*` にスライスで渡す | 子の生成もルート経由。子の struct リテラルも書けない |
 
 ## 4. ドメイン → 行は getter だけを読む

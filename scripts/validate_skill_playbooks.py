@@ -235,17 +235,17 @@ def replace_first_executor(root: Path, identity: str, action: str, target: str, 
 def self_test(plugin: Path) -> None:
     identity = identities(plugin)[0]
     equivalent_links = (
-        ("ドット付き相対link", "[工程順序の正本](./playbook.yml)"),
-        ("title付きlink", '[工程順序の正本](playbook.yml "工程順序")'),
-        ("reference link", "[工程順序の正本][workflow]\n\n[workflow]: playbook.yml\n"),
-        ("collapsed reference link", "[工程順序の正本][]\n\n[工程順序の正本]: playbook.yml\n"),
-        ("shortcut reference link", "[工程順序の正本]\n\n[工程順序の正本]: playbook.yml\n"),
+        ("ドット付き相対link", "[工程順序の定義](./playbook.yml)"),
+        ("title付きlink", '[工程順序の定義](playbook.yml "工程順序")'),
+        ("reference link", "[工程順序の定義][workflow]\n\n[workflow]: playbook.yml\n"),
+        ("collapsed reference link", "[工程順序の定義][]\n\n[工程順序の定義]: playbook.yml\n"),
+        ("shortcut reference link", "[工程順序の定義]\n\n[工程順序の定義]: playbook.yml\n"),
     )
     for label, replacement in equivalent_links:
         with tempfile.TemporaryDirectory(prefix="skill-playbook-contract-") as tmp:
             candidate = Path(tmp) / "plugin"
             shutil.copytree(plugin, candidate)
-            replace_entry(candidate, identity, "[工程順序の正本](playbook.yml)", replacement)
+            replace_entry(candidate, identity, "[工程順序の定義](playbook.yml)", replacement)
             try:
                 validate(candidate)
             except WorkflowError as exc:
@@ -263,8 +263,8 @@ def self_test(plugin: Path) -> None:
                     fail(f"正例「{qualifier}{action}工程」を拒否しました: {exc}")
     mutations = (
         ("playbook欠落", lambda root: (root / "skills" / identity / "playbook.yml").unlink(), "regular file"),
-        ("別fileへのlink", lambda root: replace_entry(root, identity, "[工程順序の正本](playbook.yml)", "[工程順序の正本](other.yml)"), "接続していません"),
-        ("別file inlineと同名definition", lambda root: replace_entry(root, identity, "[工程順序の正本](playbook.yml)", "[工程順序の正本](other.yml)\n\n[工程順序の正本]: playbook.yml\n"), "接続していません"),
+        ("別fileへのlink", lambda root: replace_entry(root, identity, "[工程順序の定義](playbook.yml)", "[工程順序の定義](other.yml)"), "接続していません"),
+        ("別file inlineと同名definition", lambda root: replace_entry(root, identity, "[工程順序の定義](playbook.yml)", "[工程順序の定義](other.yml)\n\n[工程順序の定義]: playbook.yml\n"), "接続していません"),
         ("未知need", lambda root: replace(root, identity, "agent_work: invoking_agent", "agent_work: invoking_agent\n    needs: [unknown]"), "公開入力または先行provides"),
         ("未知conditional need", lambda root: replace(root, identity, "agent_work: invoking_agent", "agent_work: invoking_agent\n    conditional_needs: [{when: branch, needs: [unknown]}]"), "公開入力または先行provides"),
         ("不存在script", lambda root: replace_first_executor(root, identity, "script", "scripts/missing.sh", False), "scripts/配下に実在しません"),

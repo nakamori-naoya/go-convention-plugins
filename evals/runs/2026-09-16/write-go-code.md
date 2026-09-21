@@ -11,7 +11,7 @@ cd go-convention-plugins && python3 ../product-planning-plugins/shared/runtime-s
   --model claude-opus-5 --judge-model claude-sonnet-5 --settings '{"effort":"high"}' --output evals/runs/2026-09-16/write-go-code.json
 ```
 
-このrepositoryは評価runtimeの複製を持たないので、正本を直接使った。fixtureはこのevalのために新規作成した（`util` package・`Get` 接頭辞・返り値3つ・naked return・`ctx` 第二引数・既定値10への丸め、を1関数に入れた題材）。
+このrepositoryは評価runtimeの複製を持たないので、正式な定義を直接使った。fixtureはこのevalのために新規作成した（`util` package・`Get` 接頭辞・返り値3つ・naked return・`ctx` 第二引数・既定値10への丸め、を1関数に入れた題材）。
 
 ## agentの所見（「」は応答の逐語。『』はreference等の出典付き引用）
 

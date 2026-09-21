@@ -5,7 +5,7 @@ description: ドメイン層に定義済みの集約の永続化ポート（Repo
 
 # implement-repository
 
-[工程順序の正本](playbook.yml)を最初に読み、同じagentが\`steps\`を宣言順に実行する。YAMLは工程順序を決め、各工程の判断内容と根拠はこの本文と参照資料を実読して評価する。失敗時は成功扱いせず停止して、完了工程、根拠、未決を残し、再開時は最初の未完了工程から続ける。
+[工程順序の定義](playbook.yml)を最初に読み、同じagentが\`steps\`を宣言順に実行する。YAMLは工程順序を決め、各工程の判断内容と根拠はこの本文と参照資料を実読して評価する。失敗時は成功扱いせず停止して、完了工程、根拠、未決を残し、再開時は最初の未完了工程から続ける。
 
 これは、**集約の永続化ポートの RDB 実装を、ドメインの値とテーブルの行の往復と、DB が拒んだ事実の翻訳だけで書く規約**である。
 
@@ -24,11 +24,11 @@ description: ドメイン層に定義済みの集約の永続化ポート（Repo
 
 ## 規約
 
-| # | 柱 | 一言で | 正本 |
+| # | 柱 | 一言で | 基準資料 |
 |---|---|---|---|
 | 1 | 責務 | 復元と永続化と翻訳だけ。業務判断・tx・ログ・Query 系・時刻と ID の採番をしない | [what-repository-is.md](references/what-repository-is.md) |
 | 2 | 2 つの型 | データモデル資料にイベント系テーブルがあればイベント型（`Apply{Event}`、集約を受け取らない、楽観ロック）、無ければ通常型（`Create` / `Update`、版なし）。`FindByID` は和型を返し、状態指定取得は禁止 | [standard-and-event-sourced.md](references/standard-and-event-sourced.md) |
-| 3 | marshaller | 同じ package の純粋関数。`{元}To{先}` 命名。行 → ドメインは `New*` と `Restore*` 経由。current 行が正本。NULL は `(T, bool)`。時刻は UTC | [marshaller.md](references/marshaller.md) |
+| 3 | marshaller | 同じ package の純粋関数。`{元}To{先}` 命名。行 → ドメインは `New*` と `Restore*` 経由。current 行が一次データ。NULL は `(T, bool)`。時刻は UTC | [marshaller.md](references/marshaller.md) |
 | 4 | sqlc と tx | SQL は `rdb/query/{aggregate}.sql` だけ。`sqlcgen.New(tx)` を直接呼ぶ。tx は `tx.From(ctx)` から取り、無ければ `ErrNoTransaction` | [sqlc-and-tx.md](references/sqlc-and-tx.md) |
 | 5 | エラー翻訳 | 制約違反 → ドメインの sentinel、`ErrNoRows` → `rdb.ErrNotFound`、楽観ロック 0 行と版の一意制約違反 → `rdb.ErrConflict`。書き込みの error は全部 `translateConstraint` に通す。文脈は `fmt.Errorf("予約 %s の保存: %w", id, err)` で 1 回 | [error-translation.md](references/error-translation.md) |
 
@@ -45,7 +45,7 @@ description: ドメイン層に定義済みの集約の永続化ポート（Repo
 
 ## 停止条件
 
-止まるのは、資料または規約の契約に反する要求、正本に無い決定が要る、利用者の許可が要る、toolが失敗した、のどれかに当たるときで、それ以外の判断の揺れでは止まらない。欠けているのが業務事実（操作・状態・拒む理由・資料が未決と明示した値）なら止まり、命名・分割・定義場所・並び・テストの置き場のような設計判断の揺れなら仮説を明示して進む。
+止まるのは、資料または規約の契約に反する要求、正式な定義に無い決定が要る、利用者の許可が要る、toolが失敗した、のどれかに当たるときで、それ以外の判断の揺れでは止まらない。欠けているのが業務事実（操作・状態・拒む理由・資料が未決と明示した値）なら止まり、命名・分割・定義場所・並び・テストの置き場のような設計判断の揺れなら仮説を明示して進む。
 
 - ドメインに `Repository` interface が無い、または interface の形が型と合わない（イベント型なのに `Update(ctx, agg)` がある、通常型なのに集約が版を持つ） → 実装せず、ドメインの規約へ返す
 - データモデル資料が無い、または集約とテーブルの対応（「シナリオと記録の対応」）が読めない → 資料の作成へ返す
