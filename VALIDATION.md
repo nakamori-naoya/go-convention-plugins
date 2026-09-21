@@ -12,14 +12,14 @@ bash scripts/validate.sh
 
 ## 配布契約（root 契約と identity）
 
-兄弟checkout `../harness-tools/tools/validate-plugin-repository.py`（保守toolの唯一の正本）で、package 境界の契約（公開・インストール対象がpackage 1件であること、Codex / Claude manifest の同一性、manifestが宣言した直接公開skillの実在、symlink不在）を確認します。`../harness-tools/` が無い環境では検査を止めます（省略も fixture による代用もしません）。CI は `.github/workflows/validate.yml` で `harness-tools` を兄弟checkoutし、`harness-tools/ci/validate.sh` で local と同じ command を実行します。
+兄弟checkout `../harness-tools/tools/validate-plugin-repository.py`（保守toolの唯一の参照元）で、package 境界の契約（公開・インストール対象がpackage 1件であること、Codex / Claude manifest の同一性、manifestが宣言した直接公開skillの実在、symlink不在）を確認します。`../harness-tools/` が無い環境では検査を止めます（省略も fixture による代用もしません）。CI は `.github/workflows/validate.yml` で `harness-tools` を兄弟checkoutし、`harness-tools/ci/validate.sh` で local と同じ command を実行します。
 
 続けて、両 marketplace の identity（名前・version・source）が manifest と一致すること、manifest が `skills/` 配下の18skillを直接宣言すること、各directoryの`SKILL.md`とnameが一致することを確認します。各skill直下の`playbook.yml` v2についてidentity、宣言順、`agent_work: invoking_agent`、実値を宣言した場合のneeds/provides接続も正例・負例で確認します。存在確認だけのprepare、外側の単一routing、入口別manifestは検査対象にしません。
 
 ## develop-<layer>（TDD の 1 単位）の工程順
 
 ```text
-正本: manifest の skills（同 package の公開入口の集合）と、develop-<layer> の隣接 playbook.yml
+基準資料: manifest の skills（同 package の公開入口の集合）と、develop-<layer> の隣接 playbook.yml
 入力: plugins/go-convention/.claude-plugin/plugin.json、skills/develop-*/playbook.yml
 正規化: playbook.yml は yq v4 で JSON 化し、steps を宣言順の list として読む
 合格述語: develop-<layer> が 1 つ以上あり、各 playbook で `skill: test-<layer>` → `id: run-red`（agent_work）→ `skill: implement-*`（1 つ以上）→ `id: run-green`（agent_work）→ `skill: write-go-code` がこの順に現れる。`skill:` の値はすべて manifest の公開入口で、`apply-go-test-convention` を呼ばない
@@ -36,7 +36,7 @@ bash scripts/validate.sh
 
 ## check-cases.py
 
-`plugins/go-convention/skills/apply-go-test-convention/scripts/check-cases.py` が判定する述語は、その docstring が正本です。通ったとき言えるのは次の5つだけです。
+`plugins/go-convention/skills/apply-go-test-convention/scripts/check-cases.py` が判定する述語は、その docstring が契約定義です。通ったとき言えるのは次の5つだけです。
 
 1. package 行が `{pkg}_test` である
 2. `func Test*`（`TestMain` を除く）ごとに、`id:` 行が1つ以上あり、値は空でなく、同じディレクトリの `*_test.go` 全体で重複しない
