@@ -107,10 +107,10 @@ func applySchema(ctx context.Context, pool *pgxpool.Pool) error {
 }
 ```
 
-DDL の正本は `rdb/schema/*.sql` で、同じディレクトリの `schema.go` が `embed.FS` として公開する。`Start` を呼ぶ package の作業ディレクトリに依らず同じ DDL が当たる。
+DDL の契約定義は `rdb/schema/*.sql` で、同じディレクトリの `schema.go` が `embed.FS` として公開する。`Start` を呼ぶ package の作業ディレクトリに依らず同じ DDL が当たる。
 
 ```go
-// Package schema は rdb/schema/*.sql（DDL の正本）を埋め込んで公開する。sqlc も同じファイルを schema として読む。
+// Package schema は rdb/schema/*.sql（DDL の契約定義）を埋め込んで公開する。sqlc も同じファイルを schema として読む。
 package schema
 
 import "embed"
@@ -125,7 +125,7 @@ var FS embed.FS
 | `dockertest.WithoutReuse()` で package 専用のコンテナにする | v4 は既定で `repository:tag` が同じコンテナを再利用する。`go test ./...` は package を並列に走らせるので、共有すると別 package の `Reset` が自分の Before を消す |
 | 接続は `docker.Retry` で `Ping` が通るまで待つ。時間切れは起動失敗 | PostgreSQL は起動直後に接続を拒む。固定の `time.Sleep` は環境で足りたり足りなかったりする |
 | 途中で失敗したら起動したものを片付け、片付けの error は `errors.Join` で足して返す | コンテナを残さない。片付けの失敗を `_ =` で捨てない |
-| スキーマは `rdb/schema/*.sql` を `embed.FS` からファイル名順に流す。テストの中で DDL を書かない | DDL の正本は 1 か所。名前付き制約（`room_booking_claims_no_overlap`）がテストと本番で同じになる |
+| スキーマは `rdb/schema/*.sql` を `embed.FS` からファイル名順に流す。テストの中で DDL を書かない | DDL の契約定義は 1 か所。名前付き制約（`room_booking_claims_no_overlap`）がテストと本番で同じになる |
 | PostgreSQL の版は本番と同じ tag を固定する（例は `17`）。`latest` にしない | 排他制約・`generated as identity` の挙動が版で変わりうる。動く版を固定する |
 | `Close(ctx)` は `pool.Close()` → `docker.Close(ctx)` の順 | 接続を閉じてからコンテナを止める。逆だと接続の切断が error として上がる |
 
@@ -174,7 +174,7 @@ func TestMain(m *testing.M) {
 | 規則 | 理由 |
 |---|---|
 | `TestMain` は package に 1 つ、`main_test.go` にだけ置く。他の `*_test.go` に `TestMain` も package 変数も置かない | プロセス単位の資源の置き場を 1 か所にする。テストの形の共通規則が `TestMain` を禁じ、実 DB を使う層の規約がこの 1 点だけを許す |
-| `TestMain` の中身は `Start` → `m.Run()` → `Close` → `os.Exit` だけ。起動の手順を書かない | 起動の正本は `rdbtest.Start`（§1）。`main_test.go` に手順があると、package ごとに手順が分かれる |
+| `TestMain` の中身は `Start` → `m.Run()` → `Close` → `os.Exit` だけ。起動の手順を書かない | 起動手順の契約定義は `rdbtest.Start`（§1）。`main_test.go` に手順があると、package ごとに手順が分かれる |
 | `pool` は `TestMain` だけが代入し、テスト関数は読むだけ | 接続を作り直すテストがあると、直列の前提（同じ DB を同じ接続で使う）が崩れる |
 | 起動に失敗したら `log.Fatalf` で落とす。`t.Skip` を書かない | 起動失敗を Skip にすると、CI で DB のテストが 1 つも走らないまま緑になる |
 | `log.Fatalf` を許すのは `TestMain` だけ。テスト関数・`rdbtest`・本番コードでは使わない | `TestMain` には `t` が無く、`os.Exit` 相当で終える手段がこれしか無い。それ以外は `require` か error を返す |

@@ -29,7 +29,7 @@
 
 ## 2. フィールド
 
-| 順 | 区分 | フィールド名 | 正本 |
+| 順 | 区分 | フィールド名 | 正式な定義 |
 |---|---|---|---|
 | 1 | 識別 | `id` / `name` / `description`。必ずこの3つ・この順。資料にあるケースは資料の ID・見出し・gherkin ブロックをそのまま写す | [case-identity.md](case-identity.md) |
 | 2 | Given | 前提の名前（`values` / `given` / `seed`）と、値で書けない Given がケースごとに違うときだけ `setup` | [given.md](given.md) |

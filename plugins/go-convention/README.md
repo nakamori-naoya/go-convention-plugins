@@ -1,6 +1,6 @@
 # go-convention
 
-**Go 1.27 の実装とテストの規約を、関心ごとに分けた 14 の自己完結skillと、層ごとの TDD 入口 4 つから適用します。** package manifestが`skills/<name>/SKILL.md`を直接公開し、規約の正本は各skill、工程順序の正本は同じdirectoryの`playbook.yml` v2にあります。同じagentが`agent_work: invoking_agent`の工程を宣言順に実行します。
+**Go 1.27 の実装とテストの規約を、関心ごとに分けた 14 の自己完結skillと、層ごとの TDD 入口 4 つから適用します。** package manifestが`skills/<name>/SKILL.md`を直接公開し、規約の基準資料は各skill、工程順序の定義は同じdirectoryの`playbook.yml` v2にあります。同じagentが`agent_work: invoking_agent`の工程を宣言順に実行します。
 
 ## これは何か／何ではないか
 

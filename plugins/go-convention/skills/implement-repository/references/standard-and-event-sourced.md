@@ -37,7 +37,7 @@ type Repository interface {
 | 規則 | 理由 |
 |---|---|
 | `FindByID` は和型（`reservation.Reservation` / `waitlist.Waitlist`）を返す。`FindTentativeByID` のような状態指定取得を作らない | 状態の絞り込みは `AsTentative` 等がドメインで担い、違う状態の拒否は sentinel で返る。リポジトリが状態を選ぶと、拒む理由が 2 か所に分かれる |
-| イベント型は集約そのものを絶対に受け取らない。`Update(ctx, agg)` / `Save(ctx, agg)` を作らない | 詳細イベント表の列はイベントの getter と 1:1 で、current 行もイベントから導ける。集約を受け取ると Next と Event の 2 つの正本ができ、どちらを書いたかが読めなくなる |
+| イベント型は集約そのものを絶対に受け取らない。`Update(ctx, agg)` / `Save(ctx, agg)` を作らない | 詳細イベント表の列はイベントの getter と 1:1 で、current 行もイベントから導ける。集約を受け取ると Next と Event の 2 つの一次データができ、どちらを書いたかが読めなくなる |
 | 通常型は `Create` と `Update` を分ける | INSERT と UPDATE は失敗の意味が違う（重複 / 見つからない）。1 つの `Save` に畳むと、どちらが起きたかを翻訳できない |
 | `Delete` / `Exists` / `List*` / `Count*` を足さない | 資料に削除の操作が無い限り `Delete` は無い。存在確認と一覧は読み取りモデルの関心で、集約を復元しない |
 | 引数と返り値はドメインの型だけ。`pgx.Tx` / `*pgxpool.Pool` / `sqlcgen.*` を interface に出さない | usecase が DB を知らずに済む |
@@ -110,7 +110,7 @@ func (r *WaitlistRepository) Update(ctx context.Context, w waitlist.Waitlist) er
 
 | 順 | 書くもの | 内容 |
 |---|---|---|
-| 1 | リソース系の正本（`reservations`） | 初回イベント（`Held`）は INSERT。それ以外は楽観ロック付き UPDATE。0 行なら `ErrConflict` で即返す |
+| 1 | リソース系の一次データ（`reservations`） | 初回イベント（`Held`）は INSERT。それ以外は楽観ロック付き UPDATE。0 行なら `ErrConflict` で即返す |
 | 2 | リソース系の従属行（`room_booking_claims` / `tentative_hold_deadlines`） | 資料の「シナリオと記録の対応」の行どおりに INSERT / DELETE |
 | 3 | 基底イベント（`reservation_base_events`） | INSERT。`version = evt.Version()`、`occurred_at = evt.OccurredAt()`。`RETURNING id` |
 | 4 | 詳細イベント（`reservation_{種別}_events`） | INSERT。`base_event_id` は 3 の返り値。版は持たない |
@@ -127,7 +127,7 @@ UPDATE を先に置くのは、競合の検出を current 行の 0 行 1 点に�
 | `ApplyExpired` | UPDATE（`expired`） | DELETE | DELETE | INSERT | `expired` |
 | `ApplyNoShowRecorded` | UPDATE（`confirmed` のまま。版だけ進む） | 変更なし | 変更なし | INSERT | `no_show_recorded`（仮定の 9 表目） |
 
-`ApplyNoShowRecorded` は状態を変えない操作のイベントだが、版は進むので current 行の UPDATE（楽観ロック）は省かない。無断不利用が起きた時刻は `reservations` に列を持たず（資料の流儀で全列 NOT NULL）、基底イベントの `occurred_at` が正本で、`FindByID` が確定済みのときだけそれを読んで `RestoreConfirmed` に渡す。
+`ApplyNoShowRecorded` は状態を変えない操作のイベントだが、版は進むので current 行の UPDATE（楽観ロック）は省かない。無断不利用が起きた時刻は `reservations` に列を持たず（資料の流儀で全列 NOT NULL）、基底イベントの `occurred_at` が一次データで、`FindByID` が確定済みのときだけそれを読んで `RestoreConfirmed` に渡す。
 
 ### 版の扱い
 
@@ -223,7 +223,7 @@ func (r *ReservationRepository) ApplyConfirmed(ctx context.Context, evt reservat
 - 基底イベントの `actor_code` はイベントの getter から出す（`ConfirmedEvent.By()` / `CancelledEvent.By()`。`Held` は `Customer()`）
 - `ApplyCancelled` / `ApplyExpired` は同じ形で、`room_booking_claims` の DELETE が増える。`ApplyExpired` / `ApplyNoShowRecorded` の `actor_code` は予約者ではなく仕組みを表す定数で、その値は資料の未決（[marshaller.md](marshaller.md) §3）
 
-### `FindByID`（current 行が正本）
+### `FindByID`（current 行が一次データ）
 
 ```go
 func (r *ReservationRepository) FindByID(ctx context.Context, id reservation.ID) (reservation.Reservation, error) {
@@ -261,7 +261,7 @@ func (r *ReservationRepository) FindByID(ctx context.Context, id reservation.ID)
 }
 ```
 
-- 復元は `reservations` と、状態に応じた従属行だけから行う。仮押さえ中は `tentative_hold_deadlines`（必須）、確定済みは無断不利用の記録（任意。仮定の 9 表目を基底イベントと JOIN した `occurred_at`）。`reservation_base_events` を読んで畳み込まない。current 行が現在の姿の正本で、`current_version` がそこにあるからである
+- 復元は `reservations` と、状態に応じた従属行だけから行う。仮押さえ中は `tentative_hold_deadlines`（必須）、確定済みは無断不利用の記録（任意。仮定の 9 表目を基底イベントと JOIN した `occurred_at`）。`reservation_base_events` を読んで畳み込まない。current 行が現在の姿の一次データで、`current_version` がそこにあるからである
 - 仮押さえなのに期限の行が無いのはデータ破損なので、`ErrNotFound` にせずそのまま error を返す。状態が仮押さえでなければ期限の行を読まない
 - 無断不利用の記録は無いことが正常なので `:many` で読み、0 行を「起きていない」として渡す。`:one` の `ErrNoRows` を「無い」に読み替える分岐を作らない
 - `reservationRowToReservation` は [marshaller.md](marshaller.md) §3

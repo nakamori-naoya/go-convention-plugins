@@ -55,7 +55,7 @@ usecase ──▶ reservation（domain: 集約・VO・Repository interface・sen
 
 | 分類 | テーブル | リポジトリの操作 |
 |---|---|---|
-| リソース系 | `reservations` | `ApplyHeld` が INSERT、他の `Apply*` が楽観ロック付き UPDATE。`FindByID` の正本。全列 NOT NULL |
+| リソース系 | `reservations` | `ApplyHeld` が INSERT、他の `Apply*` が楽観ロック付き UPDATE。`FindByID` の一次データ。全列 NOT NULL |
 | リソース系 | `room_booking_claims` | `ApplyHeld` が INSERT、`ApplyCancelled` / `ApplyExpired` が DELETE。排他制約の置き場 |
 | リソース系 | `tentative_hold_deadlines` | `ApplyHeld` が INSERT、`ApplyConfirmed` / `ApplyCancelled` / `ApplyExpired` が DELETE。`FindByID` が仮押さえのときだけ読む |
 | イベント系 | `reservation_base_events` | 全 `Apply*` が INSERT（`version = evt.Version()`）。`RETURNING id`。`(reservation_id, version)` の一意制約が競合の最後の砦 |

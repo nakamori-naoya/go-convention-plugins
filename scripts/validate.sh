@@ -37,7 +37,7 @@ for cmd in bash find jq python3 rg; do
   command -v "$cmd" >/dev/null 2>&1 && pass "command $cmd" || fail "command $cmd が無い"
 done
 
-# root契約の正本は兄弟checkout harness-tools だけ。無ければ止まる（省略もfixtureによる代用もしない）。
+# root契約の基準資料は兄弟checkout harness-tools だけ。無ければ止まる（省略もfixtureによる代用もしない）。
 TOOLS="$ROOT/../harness-tools/tools"
 [ -d "$TOOLS" ] || { echo "[error] 兄弟 checkout harness-tools が無い: $TOOLS" >&2; exit 2; }
 python3 "$TOOLS/validate-plugin-repository.py" "$ROOT" >"$TMP_ROOT/root-contract.out" 2>&1 && pass "root契約（package境界・内部skillの自己完結）" || { cat "$TMP_ROOT/root-contract.out"; fail "root契約（package境界・内部skillの自己完結）"; }

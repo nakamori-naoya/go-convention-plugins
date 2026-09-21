@@ -5,7 +5,7 @@ description: Connect-RPC（connectrpc.com/connect ＋ protobuf）の入口を Go
 
 # implement-handler
 
-[工程順序の正本](playbook.yml)を最初に読み、同じagentが\`steps\`を宣言順に実行する。YAMLは工程順序を決め、各工程の判断内容と根拠はこの本文と参照資料を実読して評価する。失敗時は成功扱いせず停止して、完了工程、根拠、未決を残し、再開時は最初の未完了工程から続ける。
+[工程順序の定義](playbook.yml)を最初に読み、同じagentが\`steps\`を宣言順に実行する。YAMLは工程順序を決め、各工程の判断内容と根拠はこの本文と参照資料を実読して評価する。失敗時は成功扱いせず停止して、完了工程、根拠、未決を残し、再開時は最初の未完了工程から続ける。
 
 これは、**RPC の要求を usecase の入力へ写し、usecase を 1 つ呼び、結果を応答へ写して返す薄い層の書き方**である。何を許し何を拒むかは集約と usecase が決め、handler はその入口と出口だけを持つ。
 
@@ -35,7 +35,7 @@ description: Connect-RPC（connectrpc.com/connect ＋ protobuf）の入口を Go
 
 ## 規約
 
-| # | 柱 | 一言で | 正本 |
+| # | 柱 | 一言で | 基準資料 |
 |---|---|---|---|
 | 1 | server 実装 | `ReservationServer` が生成 interface を満たし、`Clock` を持つ。`Unimplemented*` を埋め込まない。メソッドは「主体 → 変換（時刻は `Clock` から）→ usecase → 応答」の 4 行 | [connect-server.md](references/connect-server.md) |
 | 2 | 変換 | handler package の純粋関数 `{元}To{先}`。ID は文字列のまま、時刻は `timestamppb` ↔ `time.Time`（UTC）、操作の時刻 `At` は引数で受ける、欠けは公開 sentinel | [dto-mapping.md](references/dto-mapping.md) |
@@ -64,7 +64,7 @@ description: Connect-RPC（connectrpc.com/connect ＋ protobuf）の入口を Go
 
 ## 停止条件
 
-止まるのは、資料または規約の契約に反する要求、正本に無い決定が要る、利用者の許可が要る、toolが失敗した、のどれかに当たるときで、それ以外の判断の揺れでは止まらない。欠けているのが業務事実（操作・状態・拒む理由・資料が未決と明示した値）なら止まり、命名・分割・定義場所・並び・テストの置き場のような設計判断の揺れなら仮説を明示して進む。
+止まるのは、資料または規約の契約に反する要求、正式な定義に無い決定が要る、利用者の許可が要る、toolが失敗した、のどれかに当たるときで、それ以外の判断の揺れでは止まらない。欠けているのが業務事実（操作・状態・拒む理由・資料が未決と明示した値）なら止まり、命名・分割・定義場所・並び・テストの置き場のような設計判断の揺れなら仮説を明示して進む。
 
 - RPC に対応する usecase が無い → 書かない。usecase を先に用意することを提案して止まる（handler に業務手順を書いて埋めない）
 - 1 つの RPC が 2 つ以上の usecase を要する → 書かない。複数集約の協調は usecase の関心なので、それらを束ねる usecase を 1 つ作ることを提案して止まる
