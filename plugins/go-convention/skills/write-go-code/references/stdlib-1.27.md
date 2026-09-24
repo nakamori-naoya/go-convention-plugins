@@ -21,12 +21,12 @@
 **しない:** `sort.Slice` / `sort.Strings`（`slices.SortFunc` / `slices.Sort` に置き換わった）。自前のループ検索（`slices.Contains` / `slices.IndexFunc`）。`reflect.DeepEqual` での比較（`slices.Equal` / `maps.Equal` / `==`）。
 
 ```go
-for _, room := range slices.Sorted(maps.Keys(byRoom)) { // 1.23（maps.Keys が iter.Seq を返す）
+for _, user := range slices.Sorted(maps.Keys(byUser)) { // 1.23（maps.Keys が iter.Seq を返す）
 	// 出力順が安定する
 }
 
-sorted := slices.SortedFunc(slices.Values(slots), func(a, b TimeSlot) int { // 1.23
-	return a.Start().Compare(b.Start())
+sorted := slices.SortedFunc(slices.Values(loans), func(a, b OnLoan) int { // 1.23
+	return a.Due().Compare(b.Due())
 })
 ```
 
@@ -49,10 +49,10 @@ sorted := slices.SortedFunc(slices.Values(slots), func(a, b TimeSlot) int { // 1
 
 ```go
 // する: 行数が多く、呼び出し側が途中で止めたい
-func (q *RoomAvailabilityQuery) EachSlot(ctx context.Context, room string) iter.Seq2[AvailableSlot, error]
+func (q *LoanHistory) Each(ctx context.Context, user vo.UserNo) iter.Seq2[LoanSummary, error]
 
-// しない: 1 日分の枠は数十件。スライスで返す
-func (q *RoomAvailabilityQuery) ListForDay(ctx context.Context, room string, day time.Time) (RoomAvailability, error)
+// しない: 一人が借りている本は数冊。スライスで返す
+func (q *CurrentLoans) List(ctx context.Context, user vo.UserNo) ([]LoanSummary, error)
 ```
 
 理由: イテレータは呼び出し側に `for range` を強制し、`len` も添字も使えない。小さな結果はスライスの方が呼び出し側の選択肢が多い。
@@ -74,36 +74,19 @@ func (q *RoomAvailabilityQuery) ListForDay(ctx context.Context, room string, day
 
 ## 5. `time`
 
-**する:**
-- 時刻は UTC で保持する。値オブジェクトの `New*` で `t.UTC()` に正規化する。`UTC()` は `Location` を UTC にし、monotonic clock reading も落とす（`In` / `Local` / `UTC` はどれも落とす）ので、これだけで `==` で比べられる値になる。`Round(0)` は要らない（`Location` と monotonic が残ると同じ瞬間でも `==` が偽になる）。表示用の時差変換は境界（handler）でだけ行う
-- `time.Now()` を呼ぶのは境界（handler が `Clock` から取って usecase の入力の `At` に入れる、worker）で **1 回**。同じ処理の中で 2 回呼ばない。usecase は `Clock` を持たず入力の `At` を使い、ドメインは `at time.Time` を引数で受ける
-- 比較は `Equal` / `Before` / `After` / `Compare`。区間は半開（`start <= t < end`）で、含むかどうかは `!t.Before(start) && t.Before(end)` と書く（隣接する区間が重ならない）
-- 期間は `time.Duration`。`int` の秒・ミリ秒を持ち回らない
+時刻は UTC で保持する。値オブジェクトの `New*` で `t.UTC()` に正規化する。`UTC()` は Location を UTC にし、monotonic clock の読みも落とすので、これだけで `==` で比べられる値になる。表示のための時差の変換は、境界でだけ行う。`time.Local` に依存しない。コンテナのタイムゾーンの設定で結果が変わるからである。業務の日付（貸出日など）へ変えるときのタイムゾーンは、設定値として入口が受ける。
 
-**しない:** `time.Local` に依存する（コンテナの TZ 設定で結果が変わる）。ドメインで `time.Now()` を呼ぶ。`time.Time` の `==`（正規化していない型）。
+`time.Now()` は、ドメイン、usecase、リポジトリの本文で直接呼ばない。時刻は、横断的関心事の `Clock` から取る。業務の判断に使う時刻は入口が、記録だけの時刻はリポジトリが、それぞれ一度だけ取る。誰がどちらを取るかは apply-layer-convention が決める。
 
-```go
-func NewTimeSlot(room RoomCode, start, end time.Time) (TimeSlot, error) {
-	start, end = start.UTC(), end.UTC()
-	if !start.Before(end) {
-		return TimeSlot{}, ErrTimeSlotNotOrdered
-	}
-	return TimeSlot{room: room, start: start, end: end}, nil
-}
-```
+比較は `Equal`、`Before`、`After`、`Compare` で行う。区間は半開（`start <= t < end`）にし、含むかどうかは `!t.Before(start) && t.Before(end)` と書く。期間は `time.Duration` で持ち、秒やミリ秒の整数を持ち回らない。
 
-Go 1.27 から `time` のタイマーチャネルは常に同期（バッファ無し）で、GODEBUG `asynctimerchan` は消えた。`time.After` の結果を受け取らずに捨てても、タイマーは GC される。
-
-理由: 「同じ時刻」の判定が Location と monotonic に依存すると、DB から復元した値と生成した値が一致せず、テストが環境で揺れる。`time.Now()` が散ると 1 つの操作の中で「今」が複数になる。
+Go 1.27 から、`time` のタイマーのチャネルは常に同期（バッファ無し）で、GODEBUG の `asynctimerchan` は消えた。`time.After` の結果を受け取らずに捨てても、タイマーは GC される。
 
 ## 6. 乱数と識別子
 
-**する:** 乱数は `math/rand/v2`（1.22）。`rand.IntN(n)` / `rand.N(d)`（generic。`time.Duration` にも使える）。秘密（トークン・鍵）は `crypto/rand`。識別子の採番は標準の `uuid` package（1.27 で追加）を使い、サードパーティの uuid を足さない（API は pkg.go.dev で確認する）。採番は境界（usecase の `IDGenerator`）が行い、ドメインは `id ID` を引数で受ける。
-**しない:** `math/rand`（v1）。`rand.Seed`。`time.Now().UnixNano()` を乱数や識別子の代わりにする。
+乱数は `math/rand/v2`（1.22）の `rand.IntN(n)` や `rand.N(d)` を使う。`math/rand`（v1）と `rand.Seed` は使わない。秘密（トークン、鍵）は `crypto/rand` で作る。Go 1.27 から、`*rand.Rand` にも generic な `N` メソッドがある。
 
-Go 1.27 から `*rand.Rand` にも generic な `N` メソッドがある（トップレベルの `rand.N` と同じ振る舞い）。
-
-理由: v1 はグローバルな seed と `Seed` の呼び忘れで再現性が壊れる。v2 は初期化が要らず、generic な `N` が型ごとの関数を消す。
+識別子の元になる UUID は、標準の `uuid` package（1.27）で採番し、サードパーティの uuid を足さない。採番は横断的関心事の採番器が一か所で行い、使う側がその場で識別子の値オブジェクトへ変換する（[型と interface](types-and-interfaces.md)）。`time.Now().UnixNano()` を乱数や識別子の代わりにしない。
 
 ## 7. ファイルとプロセス
 
@@ -113,7 +96,7 @@ Go 1.27 から `*rand.Rand` にも generic な `N` メソッドがある（ト�
 ```go
 root, err := os.OpenRoot(dir)
 if err != nil {
-	return fmt.Errorf("成果物ディレクトリ %s を開く: %w", dir, err)
+	return err
 }
 defer root.Close()
 f, err := root.Open("report.csv") // dir の外へは出られない
@@ -133,12 +116,12 @@ f, err := root.Open("report.csv") // dir の外へは出られない
 
 ```go
 g, ctx := errgroup.WithContext(ctx)
-results := make([]RoomAvailability, len(rooms))
-for i, room := range rooms { // 1.22: i, room は反復ごとに新しい
+results := make([][]LoanSummary, len(users))
+for i, user := range users { // 1.22: i, user は反復ごとに新しい
 	g.Go(func() error {
-		r, err := q.ListForDay(ctx, room, day)
+		r, err := q.List(ctx, user)
 		if err != nil {
-			return fmt.Errorf("会議室 %s の空き取得: %w", room, err)
+			return err
 		}
 		results[i] = r
 		return nil
@@ -201,15 +184,16 @@ import (
 	"encoding/json/jsontext"
 )
 
+// config は、設定ファイルの形である。値は名前付きの型で受け、読み込みの時点で検証する。
 type config struct {
-	DSN     string        `json:"dsn"`
-	Timeout time.Duration `json:"timeout,omitzero"`
+	DatabaseURL DatabaseURL      `json:"database_url"`
+	Timeout     PositiveDuration `json:"timeout,omitzero"`
 }
 
 func loadConfig(r io.Reader) (config, error) {
 	var c config
 	if err := json.UnmarshalRead(r, &c, json.RejectUnknownMembers(true)); err != nil {
-		return config{}, fmt.Errorf("設定の読み取り: %w", err)
+		return config{}, err
 	}
 	return c, nil
 }
@@ -236,31 +220,27 @@ v2 で消えたもの（1.27 の正式版で GOEXPERIMENT 期から変わった�
 
 ## 12. `errors.AsType[T]`（1.26）
 
-**する:** 外部型のエラーを判定するときは `errors.AsType[T]`。変数の事前宣言とポインタ渡しが要らない。
-**しない:** `var pgErr *pgconn.PgError; if errors.As(err, &pgErr) {`。
+外部の型のエラーを判定するときは、`errors.AsType[T]` を使う。変数の事前の宣言とポインタ渡しが要らず、`*T` と `T` の取り違えがコンパイル時に分かる。
 
 ```go
-if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "23505" {
-	return reservation.ErrOverlappingSlot
+if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
+	return translatePgError(ctx, pgErr, constraints)
 }
 ```
 
-どこで何を翻訳するかはエラーの規約が決める（外部型の翻訳はリポジトリの中）。`errors.Is` / `%w` / `errors.Join` の使い分けも同じ。
-
-理由: `errors.As` は `&target` の型を実行時に検査し、`*T` と `T` の取り違えが `panic` になる。`AsType` はコンパイル時に決まる。
+アプリケーションのコードは、標準の `errors` を直接 import せず、エラーの分類を持つ package が同じ名前で提供する `Is`、`AsType` を使う。どこで何を翻訳するかと、その package の形は handle-errors が決める。
 
 ## 13. `log/slog`
 
-**する:** 常に `*Context` 版（`InfoContext` / `ErrorContext`）。複数の出力先は `slog.NewMultiHandler(h1, h2)`（1.26）。テストでは `slog.DiscardHandler`（1.24）か `t.Output()` に繋いだ handler。
-**しない:** `fmt.Println` / `log.Printf` をアプリケーションコードで使う。`slog.Info`（ctx 無し）。
+ログは常に ctx を取る形（`LogAttrs`、`InfoContext`、`ErrorContext`）で出す。logger は注入されたものを使い、`slog.Default()` と `slog.SetDefault` に頼らない。複数の出力先は `slog.NewMultiHandler(h1, h2)`（1.26）で束ねる。テストでは `slog.DiscardHandler`（1.24）か、`t.Output()` に繋いだ handler を使う。`fmt.Println` と `log.Printf` をアプリケーションのコードで使わない。
 
-どの層が出すか、属性名、秘匿はログの規約が決める。ドメイン package は `log/slog` を import しない。
+どこで記録するか、属性、秘匿は write-logs が決める。
 
 ## 14. その他、置き換えの表
 
 | 書く | 書かない | 版 |
 |---|---|---|
-| `http.NewServeMux()` ＋ `mux.HandleFunc("POST /reservations/{id}/confirm", h)` | メソッドとパスを handler 内で分岐 | 1.22 |
+| `http.NewServeMux()` ＋ `mux.HandleFunc("POST /loans/{id}/return", h)` | メソッドとパスを handler 内で分岐 | 1.22 |
 | `u.Clone()` / `values.Clone()` | `*u` のコピー（内部の `User` がポインタで共有される） | 1.27 |
 | `atomic.Int64` / `atomic.Bool` | `int64` ＋ `atomic.AddInt64` | 1.19 |
 | `os.ReadFile` / `os.WriteFile` | `io/ioutil` | 1.16 |

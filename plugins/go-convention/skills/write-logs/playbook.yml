@@ -7,24 +7,24 @@ instructions:
     directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する
 requires: []
 steps:
-  - id: inspect-boundary
+  - id: inspect-boundaries
     agent_work: invoking_agent
     purpose: "境界を確かめる"
-  - id: decide-if-boundary-receives-event
+  - id: choose-lines-to-record
     agent_work: invoking_agent
-    purpose: "出したい行が境界へ返るかを問う"
-  - id: inspect-layer
+    purpose: "記録する行を選ぶ"
+  - id: decide-level-from-table
     agent_work: invoking_agent
-    purpose: "層を確かめる"
-  - id: decide-level-message-attributes
+    purpose: "レベルを表から決める"
+  - id: decide-message-and-attributes
     agent_work: invoking_agent
-    purpose: "レベルと `msg` と属性を決める"
-  - id: inspect-secrecy
+    purpose: "メッセージと属性を決める"
+  - id: inspect-logger-injection
     agent_work: invoking_agent
-    purpose: "秘匿を確かめる"
+    purpose: "logger の渡し方を確かめる"
   - id: run-structural-checks
     agent_work: invoking_agent
-    purpose: "機械で見られる分を通す"
+    purpose: "機械検査を通す"
   - id: report
     agent_work: invoking_agent
     purpose: "報告する"

@@ -12,15 +12,15 @@
 
 | 入口 | 何をするか |
 |---|---|
-| `write-go-code` | Go 1.27 のコーディング規約で書く・直す |
+| `write-go-code` | Go 1.27 の言語レベルの規約（プリミティブを使わない、丸めない、関数の形、interface、命名、コメント、ツール）で書く・直す |
 | `apply-go-package-layout` | 確定済みの論理責務を Go の package 配置と import 方向へ写す |
 | `implement-domain-model` | domain-model 資料から値オブジェクト・エンティティ・集約を実装する |
 | `implement-repository` | 集約の永続化ポートを sqlc + pgx で実装する（通常型・イベント型） |
 | `implement-query-service` | CQRS の読み取り側を sqlc で実装する |
 | `implement-usecase` | command / query の usecase を実装する |
 | `implement-handler` | Connect-RPC の handler と interceptor を実装する |
-| `handle-errors` | エラーの作り方・包み方・翻訳 |
-| `write-logs` | log/slog の出し方と出す場所 |
+| `handle-errors` | エラーを15の分類から定義し、運び、翻訳し、応答の表と処理の表で扱う |
+| `write-logs` | ログレベルの意味と分類からの表、境界で 1 回だけ記録する場所、logger の注入、属性と秘匿 |
 | `apply-go-test-convention` | テストの形（テーブル駆動・id/name/description・Given/When/Then） |
 | `test-domain-model` | 集約・エンティティ・値オブジェクトのテストを資料の BDD から書く |
 | `test-repository` | 永続化層（リポジトリ・query service）のテストをデータモデル資料から書く |

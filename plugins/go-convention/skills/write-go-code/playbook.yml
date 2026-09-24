@@ -13,15 +13,15 @@ steps:
   - id: inspect-module-and-tools
     agent_work: invoking_agent
     purpose: "`go.mod` とツールを確かめる"
+  - id: normalize-types
+    agent_work: invoking_agent
+    purpose: "型を揃える"
   - id: normalize-functions
     agent_work: invoking_agent
     purpose: "関数の形を揃える"
-  - id: normalize-types-and-interfaces
+  - id: normalize-names-and-comments
     agent_work: invoking_agent
-    purpose: "型と interface を揃える"
-  - id: normalize-names
-    agent_work: invoking_agent
-    purpose: "名前を揃える"
+    purpose: "名前とコメントを揃える"
   - id: adopt-standard-library
     agent_work: invoking_agent
     purpose: "標準ライブラリに置き換える"
