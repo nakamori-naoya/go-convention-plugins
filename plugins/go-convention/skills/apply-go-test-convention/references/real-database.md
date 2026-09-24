@@ -39,7 +39,7 @@ err = dockerPool.Retry(ctx, readyTimeout, func() error {
 })
 ```
 
-固定の `time.Sleep` で待たない。環境によって足りたり足りなかったりする。
+待ち方の原則（sleep で待たず、観測できる条件で期限を付けて待つ）は、testing-strategy の待機の原則に従う。ここに置くのは、その原則を Go の起動待ちに当てた形だけである。
 
 # スキーマは migration の履歴から作る
 
