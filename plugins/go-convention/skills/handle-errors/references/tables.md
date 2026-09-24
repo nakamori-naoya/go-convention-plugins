@@ -44,7 +44,7 @@ func codeOf(err error) connect.Code {
 }
 ```
 
-表に無い分類に当たったときは、「分類不能」として扱う。網羅はテストで確かめるので、この経路に来るのは表の更新漏れだけである。
+表に無い分類に当たったときは、「分類不能」の行を使う。これは、write-go-code の「未知の値を丸めない（`map` を引けなかったら error を返す）」の、唯一の例外である。境界はエラーを受け取った最後の場所で、ここで error を返しても受け取る相手がいない。そして「分類不能」は15の分類の一つで、ERROR と `unclassified` の属性で記録されるので、丸めても失敗は隠れず、人が表を直す合図になる。網羅はテストで確かめるので、この経路に来るのは表の更新漏れだけである。処理の表とログレベルの表も、同じ理由で同じ扱いにする。
 
 表は、最も外の interceptor の package に一つだけ置く。handler の本文と、要求と応答の変換関数では、`connect.NewError` を作らない。内側で `connect.Error` が作られていたら、境界はそれを「分類不能」として扱う。
 
@@ -95,7 +95,7 @@ func TestRetryable(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.id+" "+tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, errors.Retryable(errors.Wrap(tt.category, "テスト")))
+			assert.Equal(t, tt.want, errors.Retryable(errors.Define(tt.category, "テスト")))
 		})
 	}
 }
