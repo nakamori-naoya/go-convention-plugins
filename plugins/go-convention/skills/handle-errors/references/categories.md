@@ -98,7 +98,7 @@ type Error struct {
 	text string
 }
 
-func Wrap(base Base, text string) *Error {
+func Define(base Base, text string) *Error {
 	return &Error{base: base, text: text}
 }
 
