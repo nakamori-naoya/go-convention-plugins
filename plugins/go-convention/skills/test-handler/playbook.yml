@@ -7,24 +7,21 @@ instructions:
     directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する
 requires: []
 steps:
-  - id: choose-rpc
+  - id: confirm-startup
     agent_work: invoking_agent
-    purpose: "対象の RPC を 1 つ決める"
-  - id: inspect-composition-seam
-    agent_work: invoking_agent
-    purpose: "組み立て関数と差し替え点を確かめる"
-  - id: prepare-test-main
-    agent_work: invoking_agent
-    purpose: "`main_test.go` を置く（無ければ）"
-  - id: select-cases
+    purpose: "起動を確かめる"
+  - id: choose-cases
     agent_work: invoking_agent
     purpose: "ケースを選ぶ"
-  - id: write-table-and-loop
+  - id: write-table
     agent_work: invoking_agent
-    purpose: "表とループ本体を書く"
-  - id: verify
+    purpose: "表を書く"
+  - id: write-loop
     agent_work: invoking_agent
-    purpose: "検証する"
+    purpose: "ループ本体を書く"
+  - id: run-structural-checks
+    agent_work: invoking_agent
+    purpose: "機械検査を通す"
   - id: report
     agent_work: invoking_agent
     purpose: "報告する"
