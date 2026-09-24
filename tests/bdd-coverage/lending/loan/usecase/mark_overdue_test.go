@@ -11,7 +11,7 @@ func TestMarkOverdue_Execute(t *testing.T) {
 		description string
 	}{
 		{
-			id:   "BDD-OUT-001",
+			id:   "BDD-004",
 			name: "延滞になった貸出の通知の要求が延滞と同時に記録される",
 			description: `Given: 貸出 L-0001 は貸出中で、返却期限は2026年10月15日である
 When: 2026年10月16日に貸出 L-0001 を延滞にする

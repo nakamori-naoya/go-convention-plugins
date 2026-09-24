@@ -1,26 +1,3 @@
-# 完全な例
-
-規約を満たしたテストファイルを一つ置く。書き始める前に一度読み、この形を写す。
-
-コードは、リポジトリの `tests/examples/` にある Go のモジュール（Go 1.27）と同じで、`go vet` と `go test -shuffle=on` が通る。被験体は、図書館の貸出の「本を借りる」だけを持つ小さな package で、例を小さく保つために、エラーの分類の package を使わず標準の `errors` で具体エラーを定義している。
-
-資料 `tests/examples/docs/lending/業務知識.md` の BDD のうち、このテストが主に担う三つ（BDD-001、BDD-003、BDD-004）を、ID、見出し、gherkin をそのまま写している。資料に無い二つ（上限の直前、延滞と上限の両方に当たる組）は、生成した id で後ろに足している。
-
-被験体の公開 API は次のとおりである。
-
-```text
-func NewCount(n int) (Count, error)                  // 負なら ErrCountNegative
-func NewStanding(lent, overdue Count) Standing
-func NewLentAt(at time.Time) LentAt
-func NewPendingLoan(standing Standing) PendingLoan
-func (p PendingLoan) Borrow(lentAt LentAt) (OnLoan, error) // ErrUserHasOverdue、ErrLoanLimitReached
-func (l OnLoan) Due() Due
-func (d Due) Day() time.Time
-```
-
-`lending_test.go`:
-
-```go
 package lending_test
 
 // BDD の資料: tests/examples/docs/lending/業務知識.md
@@ -137,10 +114,3 @@ Then: 延滞の貸出がある利用者が本を借りるとして拒まれる`,
 		})
 	}
 }
-```
-
-# 読み方
-
-表の前では、表で使う値オブジェクトを `New*` と `require.NoError` で作る。Given のフィールドは値オブジェクトの型で持つ。資料の `Given:` に現れる値（借りている冊数、延滞の冊数）だけがケースごとに変わるので、表を縦に読めば差分が分かる。
-
-ループ本体は一回だけで、実行と検証がそこにある。拒むケースは `require.ErrorIs` の後に `assert.Zero` で結果がゼロ値であることを見る。受けるケースは、取り出した返却期限の日を比べる。
