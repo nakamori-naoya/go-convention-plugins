@@ -15,7 +15,13 @@ func TestPendingLoan_Borrow(t *testing.T) {
 	user := vobuilders.NewUserNoBuilder().Build(t)
 	book := vobuilders.NewBookNoBuilder().Build(t)
 	loanID := domainbuilders.NewLoanIDBuilder().Build(t)
-	lentAt := domain.NewLentAt(time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC))
+	lentAt := domain.NewLentAt(time.Date(2026, 10, 1, 1, 0, 0, 0, time.UTC))
+	cal, err := domain.NewLibraryCalendar("Asia/Tokyo")
+	require.NoError(t, err)
+
+	// 表で使う冊数。生成の条件は冊数のテストが確かめるので、ここで失敗するなら表以前の問題である。
+	noneLent := domainbuilders.NewLentCountBuilder().WithValue(0).Build(t)
+	fiveLent := domainbuilders.NewLentCountBuilder().WithValue(5).Build(t)
 
 	// lent は、発したイベントの射影である。値だけを取り出しの関数で並べて比べる。
 	type lent struct {
@@ -38,18 +44,18 @@ func TestPendingLoan_Borrow(t *testing.T) {
 			name: "延滞の無い利用者が本を借りると貸出中の貸出が生まれる",
 			description: `Given: 利用者番号 U-0001 の利用者は本を1冊も借りておらず、延滞の貸出も無い
   And: 資料番号 B-1001 の本はどの貸出にも属していない
-When: 利用者 U-0001 が2026年10月1日に本 B-1001 を借りる
+When: 利用者 U-0001 が2026年10月1日 10:00に本 B-1001 を借りる
 Then: 利用者 U-0001 と本 B-1001 の貸出が貸出中で生まれる
-  And: 貸出日は2026年10月1日、返却期限は2026年10月15日である`,
-			standing:  domain.NewStanding(domainbuilders.NewLentCountBuilder().WithValue(0).Build(t), false),
-			wantNext:  domain.RestoreOnLoan(loanID, user, book, lentAt, domain.DueFrom(lentAt), domain.FirstVersion),
+  And: 貸出日時は2026年10月1日 10:00、返却期限は2026年10月15日である`,
+			standing:  domain.NewStanding(noneLent, domain.NoOverdue),
+			wantNext:  domain.RestoreOnLoan(loanID, user, book, lentAt, domain.DueFrom(lentAt, cal), domain.FirstVersion),
 			wantEvent: lent{loanID: loanID, version: domain.FirstVersion, lentAt: lentAt},
 		},
 		{
 			id:   "BDD-003",
 			name: "5冊借りている利用者は6冊目を借りられない",
 			description: `…資料の gherkin をそのまま…`,
-			standing: domain.NewStanding(domainbuilders.NewLentCountBuilder().WithValue(5).Build(t), false),
+			standing: domain.NewStanding(fiveLent, domain.NoOverdue),
 			wantErr:  domain.ErrLoanLimitReached,
 		},
 		{
@@ -58,7 +64,7 @@ Then: 利用者 U-0001 と本 B-1001 の貸出が貸出中で生まれる
 			description: `Given: 利用者は延滞の貸出を持ち、借りている冊数は5冊である
 When: 利用者が本を借りる
 Then: 延滞の貸出がある利用者が本を借りるとして拒まれる`,
-			standing: domain.NewStanding(domainbuilders.NewLentCountBuilder().WithValue(5).Build(t), true),
+			standing: domain.NewStanding(fiveLent, domain.HasOverdue),
 			wantErr:  domain.ErrUserHasOverdue,
 		},
 	}
@@ -68,7 +74,7 @@ Then: 延滞の貸出がある利用者が本を借りるとして拒まれる`,
 
 			pending := domain.NewPendingLoan(user, book, tt.standing)
 
-			got, err := pending.Borrow(loanID, lentAt)
+			got, err := pending.Borrow(loanID, lentAt, cal)
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
 				assert.Zero(t, got)
@@ -90,7 +96,7 @@ Given のフィールドは、初期状態の型の生成関数の引数、ま�
 
 # When
 
-When は、コマンドの引数名そのままのフィールドにする。表の全ケースで同じ値なら、表の前で一度作ってループ本体で渡す（上の例の `loanID` と `lentAt`）。業務の時刻は、時点の値オブジェクトで渡す。
+When は、コマンドの引数名そのままのフィールドにする。表の全ケースで同じ値なら、表の前で一度作ってループ本体で渡す（上の例の `loanID`、`lentAt`、`cal`）。業務の時刻は、時点の値オブジェクトで渡す。暦は、テストでもタイムゾーンの名前から作り、既定のタイムゾーンに頼らない。上の例の貸出日時は UTC の 1:00 で、図書館の暦（Asia/Tokyo）では10月1日 10:00 にあたる。
 
 # Then
 
@@ -126,7 +132,7 @@ func TestReturnedLoan_Return(t *testing.T) {
 		t.Run(tt.id+" "+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			returned := domain.RestoreReturnedLoan(loanID, user, book, lentAt, domain.DueFrom(lentAt), v2)
+			returned := domain.RestoreReturnedLoan(loanID, user, book, lentAt, domain.DueFrom(lentAt, cal), v2)
 
 			got, err := returned.Return()
 			require.ErrorIs(t, err, tt.wantErr)
