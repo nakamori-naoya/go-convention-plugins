@@ -35,7 +35,7 @@ var (
 
 # 識別子と版
 
-`uuid` は Go の標準ライブラリの package である。関数の名前と返り値は、書く前に pkg.go.dev で確かめる。
+`uuid` は、Go 1.27 で標準ライブラリに入った package である（https://pkg.go.dev/uuid ）。`uuid.Parse` と `UUID.String` はそこに載っている。版が違うなら、書く前に pkg.go.dev で確かめる。
 
 ```go
 package domain
@@ -91,6 +91,7 @@ import "time"
 type LibraryCalendar struct{ loc *time.Location }
 
 // NewLibraryCalendar は、IANA のタイムゾーン名（例: "Asia/Tokyo"）から暦を作る。
+// 名前は設定値から来るので、拒まれたら組み立て（main）がこのエラーを「回復不能」へ付け替えて起動を止める。
 func NewLibraryCalendar(zone string) (LibraryCalendar, error) {
 	loc, err := time.LoadLocation(zone)
 	if err != nil || zone == "" {
