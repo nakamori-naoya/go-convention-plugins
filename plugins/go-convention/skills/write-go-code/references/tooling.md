@@ -1,6 +1,6 @@
 # ツール
 
-機械で言えることは機械に言わせ、人は機械で言えないことだけを読む。フォーマット、import の順、禁止する API、import の向き、和の網羅は、規則として覚えるのではなく、ツールが落とす状態にする。
+機械で言えることは機械に言わせ、人は機械で言えないことだけを読む。フォーマット、import の順、禁止する API、import の向き、和の型（封じた interface で表す「A か B か」）の分岐の網羅は、規則として覚えるのではなく、ツールが落とす状態にする。
 
 例の module path は `example.com/library` である。
 
@@ -52,7 +52,7 @@ golangci-lint v2 を `go tool` で固定し、設定はリポジトリの直下�
 | `noctx` | ctx を渡していない HTTP と DB の呼び出し |
 | `errorlint` | `==` でのエラーの比較 |
 
-`depguard` は、依存の向きをコンパイルの次に早い段階で守る。全 package で、`math/rand`（v1）、`io/ioutil`、標準の `errors` を禁じる。標準の `errors` を import してよいのは、エラーの分類を持つ package だけである（handle-errors が定める）。ドメインの package では、さらに `log/slog`、`encoding/json`、pgx、connect を禁じる。ドメインは記録、JSON、永続化、入口のプロトコルを知らないからである。
+`depguard` は、依存の向きをコンパイルの次に早い段階で守る。全 package で、`math/rand`（v1）、`io/ioutil`、標準の `errors` を禁じる。標準の `errors` を import してよいのは、エラーの分類を持つ package だけである（handle-errors が定める）。ドメインの package では、さらに `log/slog`、`encoding/json`、pgx、connect を禁じる。ドメインは、記録、JSON、永続化、要求を受けるときのプロトコル（Connect）を知らないからである。
 
 ```yaml
 version: "2"
