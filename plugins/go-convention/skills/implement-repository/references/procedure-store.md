@@ -10,7 +10,7 @@
 
 口は、読み取りの口を呼ばない。書き込みの判断に要る読み取り（回収できる要求を探す）は、口のメソッドの中で、自分の SQL として行う。その SQL は、物理設計の読み取りの台帳（Read-003 のような）に載っているものに限る。
 
-口は、業務の判断をしない。技術的な処理の段階（回収済みか、リースが切れたか、回収の回数が上限に達したか）で、読む行と書く記録を選ぶことだけを行う。
+口は、判断をしない。技術的な処理の段階（回収済みか、リースが切れたか）で読む行を選び、頼まれた記録を書くことだけを行う。回収の回数が上限に達したかの比較は、手順（usecase）が行う。
 
 時刻（回収した時点、送った時点）は、口が Clock から一度だけ取る。記録の行の識別子は、口が採番器から取る。
 
@@ -22,11 +22,13 @@
 
 # 回収の回数の上限
 
-回収の回数が、データモデルの資料の決めた上限に達した要求は、回収せずに失敗として記録し、以後の候補から外す。これを決めるのは口の `Claim` で、候補が運ぶ次の回収の版が上限を超えていれば、最後の回収を指して失敗を記録し、回収しなかったことを返す。上限を手順に置かないのは、それが技術的な処理の段階で、要求の行から口が決められるからである。上限が無いと、送れない要求が無限に回収され続ける。
+回収の回数が、データモデルの資料の決めた上限に達した要求は、回収せずに失敗として記録し、以後の候補から外す。上限との比較は手順が行い、候補が運ぶ次の回収の版が上限を超えていれば、`Claim` を呼ばずに `RecordFailed` を呼ぶ。口は、比較の結果を受けて記録するだけである。上限が無いと、送れない要求が無限に回収され続ける。
 
 # 成功と失敗はどちらか一つ
 
-物理設計が「成功と失敗はどちらか一つ」を、書く前に他方が無いことを同じトランザクションで確かめる形で決めているなら、口はそのとおりに確かめ、他方が先にあれば書かずに終える。確かめ方を実装の側で変えない。
+図書館の物理設計は、成功と失敗の記録を次の形で守ると決めている。分離レベルは READ COMMITTED で、書く前に要求の行（`overdue_notice_requested_events`）を `SELECT … FOR UPDATE` でロックし、同じトランザクションの中で、もう一方の表にその要求が無いことを確かめてから書く。やり直しはしない。口の `RecordSucceeded` と `RecordFailed` は、この順で SQL を呼び、他方が先にあれば書かずに終える。確かめ方を実装の側で変えない。
+
+`RecordFailed` は要求を受け取り、失敗の行が指す回収（打ち切った回収）には、その要求の最新の回収を自分の SQL で読んで使う。送れなかった直後なら、それは今回の回収であり、上限で打ち切るなら、最後にリースが切れた回収である。
 
 # 例
 
@@ -36,9 +38,6 @@ type OverdueNoticeRequests struct {
 	clock clock.Clock
 	ids   idgen.Generator
 }
-
-// maxClaims は、打ち切るまでの回収の回数である。データモデルの資料の仮置き（5回。仮説）。
-const maxClaims = 5
 
 // ListClaimable は、回収できる要求を古い順に最大 limit 件選ぶ。物理設計の Read-003。
 func (s *OverdueNoticeRequests) ListClaimable(ctx context.Context, limit contract.BatchSize) ([]contract.ClaimCandidate, error) {
@@ -64,26 +63,42 @@ func (s *OverdueNoticeRequests) ListClaimable(ctx context.Context, limit contrac
 	return candidates, nil
 }
 
-// Claim は、候補の次の版の回収を記録する。回収の回数が上限を超えるなら、回収せずに失敗を記録し、false を返す。
-func (s *OverdueNoticeRequests) Claim(ctx context.Context, relay contract.RelayID, c contract.ClaimCandidate) (contract.Claim, bool, error) {
+// Claim は、候補の次の版の回収を記録する。上限との比較はしない。
+func (s *OverdueNoticeRequests) Claim(ctx context.Context, relay contract.RelayID, c contract.ClaimCandidate) (contract.Claim, error) {
 	q, err := s.queries(ctx)
 	if err != nil {
-		return contract.Claim{}, false, err
-	}
-	now := s.clock.Now()
-	if c.NextVersion().Int64() > maxClaims {
-		if err := q.InsertOverdueNoticeFailedEvent(ctx, exhaustedParams(c, now)); err != nil {
-			return contract.Claim{}, false, rdb.Translate(ctx, err, claimConstraints)
-		}
-		return contract.Claim{}, false, nil
+		return contract.Claim{}, err
 	}
 	claimID := s.ids.NewID()
-	if err := q.InsertOverdueNoticeClaimedEvent(ctx, claimedParams(claimID, c, now)); err != nil {
+	if err := q.InsertOverdueNoticeClaimedEvent(ctx, claimedParams(claimID, c, s.clock.Now())); err != nil {
 		// 同じ版の回収が先にあれば、同時更新で競合した、になる。
-		return contract.Claim{}, false, rdb.Translate(ctx, err, claimConstraints)
+		return contract.Claim{}, rdb.Translate(ctx, err, claimConstraints)
 	}
-	return contract.NewClaim(claimID, c, relay), true, nil
+	return contract.NewClaim(claimID, c, relay), nil
+}
+
+// RecordFailed は、要求を打ち切った失敗を記録する。要求の行をロックし、成功が先にあれば書かずに終える。
+func (s *OverdueNoticeRequests) RecordFailed(ctx context.Context, req contract.RequestID, reason contract.FailureReason) error {
+	q, err := s.queries(ctx)
+	if err != nil {
+		return err
+	}
+	// 物理設計の「成功と失敗はどちらか一つ」。要求の行を FOR UPDATE でロックしてから確かめる。
+	if err := q.LockOverdueNoticeRequest(ctx, rdb.IDColumn(req)); err != nil {
+		return rdb.Translate(ctx, err, nil)
+	}
+	succeeded, err := q.ExistsOverdueNoticeSucceededEvent(ctx, rdb.IDColumn(req))
+	if err != nil {
+		return rdb.Translate(ctx, err, nil)
+	}
+	if succeeded {
+		return nil
+	}
+	if err := q.InsertOverdueNoticeFailedEventForLatestClaim(ctx, failedParams(req, reason, s.clock.Now())); err != nil {
+		return rdb.Translate(ctx, err, claimConstraints)
+	}
+	return nil
 }
 ```
 
-リースの長さ（`claimLease`）と、打ち切るまでの回収の回数（`maxClaims`）は、データモデルの資料が決めた値を名前のある定数にする。資料が仮置きした値なら、その仮置きをコメントに書く。
+リースの長さ（`claimLease`）は、データモデルの資料が決めた値を名前のある定数にする。打ち切るまでの回収の回数は、比較する手順の側に同じ形で置く。資料が仮置きした値なら、その仮置きをコメントに書く。
