@@ -38,7 +38,11 @@ func (r *LoanRepository) FindPendingLoan(ctx context.Context, user vo.UserNo, bo
 	if err != nil {
 		return domain.PendingLoan{}, fmt.Errorf("%w: 利用者 %s の借りている冊数: %v", ErrStoredLoanCorrupted, user.Value(), err)
 	}
-	return domain.NewPendingLoan(user, book, domain.NewStanding(lent, row.HasOverdue)), nil
+	overdue := domain.NoOverdue
+	if row.HasOverdue {
+		overdue = domain.HasOverdue
+	}
+	return domain.NewPendingLoan(user, book, domain.NewStanding(lent, overdue)), nil
 }
 ```
 
