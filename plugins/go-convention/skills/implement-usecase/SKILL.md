@@ -1,6 +1,6 @@
 ---
 name: implement-usecase
-description: Go の usecase を、三つの形で書く。戦術的 DDD の command（集約を見つける → コマンドを一回呼ぶ → 結果を適用する。読み取りの口を呼ばず、状態を見て分岐しない）、単純なパターンの手順（リポジトリ相当の口を順に呼び、外部との通信をトランザクションの外に置き、一件ずつ確定させ、冪等にする）、query（読み取りの口を呼んで読み取りモデルを返す）である。入力は値オブジェクトで受け、トランザクションは usecase が物理設計の指定（分離レベルとやり直し）で張る。「この usecase を書いて」「業務イベントを usecase にして」「Outbox の回収と発行の手順を書いて」「トランザクションの張り方を直して」と言われたときに使う。パターンの選択は apply-layer-convention、集約は implement-domain-model、永続化は implement-repository、入口は implement-handler、テストは test-usecase、分離レベルは物理設計の資料へ返す。
+description: Go の usecase を、三つの形で書く。戦術的 DDD の command（集約を見つける → コマンドを一回呼ぶ → 結果を適用する。読み取りのポートを呼ばず、状態を見て分岐しない）、単純なパターンの手順（リポジトリ相当の口を順に呼び、外部との通信をトランザクションの外に置き、一件ずつ確定させ、冪等にする）、query（読み取りのポートを呼んで読み取りモデルを返す）である。入力は値オブジェクトで受け、トランザクションは usecase が物理設計の指定（分離レベルとやり直し）で張る。「この usecase を書いて」「業務イベントを usecase にして」「Outbox の回収と発行の手順を書いて」「トランザクションの張り方を直して」と言われたときに使う。パターンの選択は apply-layer-convention、集約は implement-domain-model、永続化は implement-repository、入口は implement-handler、テストは test-usecase、分離レベルは物理設計の資料へ返す。
 ---
 
 # implement-usecase
@@ -11,7 +11,7 @@ description: Go の usecase を、三つの形で書く。戦術的 DDD の comm
 
 一つの業務イベント、一つの技術的な処理、一つの読み取りを、usecase として書く。読み終えると、どの形で書き、トランザクションをどう張り、何に依存してよいかを決められる。
 
-どの処理をどのパターンで書くか、command の流れ（usecase は判断も材料集めもしない）とその理由、トランザクションの所有は、development-convention の `apply-layer-convention` が決める。この skill は、それを Go の形に写すことだけを持つ。
+どの処理をどのパターンで書くか、command の流れ（usecase は判断も材料集めもしない）とその理由、トランザクションの所有は、development-convention の `apply-layer-convention` が決める。この skill が受け持つのは、それを Go の形に写すことだけである。
 
 ## 入力
 
@@ -29,11 +29,11 @@ description: Go の usecase を、三つの形で書く。戦術的 DDD の comm
 
 ### 単純なパターンの手順
 
-Outbox の回収と発行がその代表である。リポジトリ相当の口を順に呼ぶ。外部との通信はトランザクションの外に置き、進捗は一件ごとに確定させ、外部への口には冪等の鍵を渡す。一件の失敗で続けるか打ち切るか、一時失敗か恒久失敗かは、handle-errors の処理の表で決める。詳しくは [手順の形](references/procedure.md) を読む。
+その代表は Outbox の回収と発行である。Outbox では、業務の変更と同じトランザクションで送る要求を一行記録しておき、別の手順がその行を回収して外へ送る。リポジトリ相当の口を順に呼ぶ。外部との通信はトランザクションの外に置き、進捗は一件ごとに確定させ、外部への口には冪等の鍵を渡す。一件の失敗で続けるか打ち切るか、一時失敗か恒久失敗かは、handle-errors の処理の表（エラーの分類ごとに、失敗が全体に及ぶか、再処理で通りうるかを決めた表）で決める。詳しくは [手順の形](references/procedure.md) を読む。
 
 ### query
 
-読み取りの口を呼んで読み取りモデルを返し、トランザクションを張らない。詳しくは [query の形](references/query.md) を読む。
+読み取りのポートを呼んで読み取りモデルを返し、トランザクションを張らない。詳しくは [query の形](references/query.md) を読む。
 
 ## 手順
 

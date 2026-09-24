@@ -12,15 +12,15 @@ Go 1.26 から、`new(expr)` で式のアドレスを取れる。使うのは、
 
 ## `iter.Seq` は、列挙そのものに価値があるときだけ
 
-`iter.Seq[T]` と `iter.Seq2[K, V]` を返すのは、全件をメモリに載せられない（DB のカーソル、大きなファイル）か、呼び出し側が途中で止めたい（残りを作らない）か、内部の構造を隠して列挙だけを公開したいときだけである。数十件で終わる結果や、呼び出し側が結局 `slices.Collect` するものは、スライスで返す。イテレータは呼び出し側に `for range` を強い、`len` も添字も使えなくする。
+`iter.Seq[T]` と `iter.Seq2[K, V]` を返すのは、全件をメモリに載せられない（DB のカーソル、大きなファイル）か、呼び出し側が途中で止めたい（残りを作らない）か、内部の構造を隠して列挙だけを公開したいときだけである。数十件で終わる結果や、呼び出し側が結局 `slices.Collect` するものは、スライスで返す。イテレータで返すと、呼び出し側は `for range` でしか読めず、`len` も添字も使えない。
 
 # 時刻、乱数、識別子
 
 ## 時刻は UTC で持ち、`Clock` から取る
 
-時刻は UTC で保持する。値オブジェクトの `New*` で `t.UTC()` に正規化すると、Location と monotonic clock の読みが揃い、`==` で比べられる値になる。表示のための時差の変換は、境界でだけ行う。`time.Local` に依存しない。業務の日付へ変えるときのタイムゾーンは、設定値として入口が受ける。
+時刻は UTC で保持する。値オブジェクトの `New*` で `t.UTC()` に正規化すると、Location と monotonic clock の読みが揃い、`==` で比べられる値になる。表示のための時差の変換は、境界でだけ行う。`time.Local` に依存しない。業務の日付へ変えるときのタイムゾーンは、組み立て（`run`）が設定値から一度だけ作って渡す。
 
-`time.Now()` を、ドメイン、usecase、リポジトリの本文で直接呼ばない。時刻は横断的関心事の `Clock` から取る。業務の判断に使う時刻は入口が、記録だけの時刻はリポジトリが、それぞれ一度だけ取る（apply-layer-convention が決める）。区間は半開（`start <= t < end`）にし、期間は `time.Duration` で持つ。
+`time.Now()` を、ドメイン、usecase、リポジトリの本文で直接呼ばない。時刻は横断的関心事の `Clock` から取る。業務の判断に使う時刻は要求を受ける入口（handler やワーカー）が、記録だけに使う時刻はリポジトリが、それぞれ一度だけ取る（apply-layer-convention が決める）。区間は半開（`start <= t < end`）にし、期間は `time.Duration` で持つ。
 
 ## 乱数と識別子
 
@@ -30,7 +30,7 @@ Go 1.26 から、`new(expr)` で式のアドレスを取れる。使うのは、
 
 ## 裸の `go` には寿命を持たせる
 
-goroutine を起動するときは、誰が終わりを待つか（`sync.WaitGroup` か `errgroup`）と、いつ止まるか（`ctx.Done()`）の両方が読めるようにする。どちらかが読めない `go` は書かない。goroutine が error を返すなら `golang.org/x/sync/errgroup` を使い、`errgroup.WithContext` で最初の失敗が残りを取り消すようにする。常駐するワーカーは、見張りの関数で起動する（write-logs が定める）。
+goroutine を起動するときは、誰が終わりを待つか（`sync.WaitGroup` か `errgroup`）と、いつ止まるか（`ctx.Done()`）の両方が読めるようにする。どちらかが読めない `go` は書かない。goroutine が error を返すなら `golang.org/x/sync/errgroup` を使い、`errgroup.WithContext` で最初の失敗が残りを取り消すようにする。常駐するワーカーは、panic と予期しない終了を記録して起動し直す見張りの関数（`Supervise`）で起動する（write-logs が定める）。
 
 共有する状態は、`sync.Mutex` を struct のフィールドに持ち（埋め込まない）、ロックの範囲を関数の先頭の `mu.Lock(); defer mu.Unlock()` で示す。
 

@@ -4,7 +4,7 @@
 
 usecase のテストは、実物の PostgreSQL（dockertest）、実物のリポジトリ、実物の Query の実装、実物のトランザクションの管理を使う。組み立ては、本番と同じコンストラクタで行う。実 DB の基盤は、apply-go-test-convention の実 DB の規則に従う。
 
-差し替えるのは、時計、採番器、制御できない外部の境界のポート（延滞の通知を外部へ発行する口）だけで、gomock を使う（apply-go-test-convention の差し替えてよい境界）。業務の時刻は入力で渡すので、command のテストで Clock の mock が要るのは、リポジトリが記録の時刻を取るときである。
+差し替えるのは、時計、採番器、制御できない外部の境界のポート（延滞の通知を外部へ発行するポート）だけで、gomock を使う（apply-go-test-convention の差し替えてよい境界）。業務の時刻は入力で渡すので、command のテストで Clock の mock が要るのは、リポジトリが記録の時刻を取るときである。
 
 ```go
 ctrl := gomock.NewController(t)

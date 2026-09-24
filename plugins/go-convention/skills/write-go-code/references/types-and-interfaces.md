@@ -126,7 +126,7 @@ interface は、自分の名前のファイル（`Clock` なら `clock.go`、`No
 
 ## `any` は、値の型が実行時まで決まらない境界だけ
 
-`any` を使うのは、JSON の decode、`slog` の属性値、`sql.Scanner` のように、値の型が実行時まで決まらない境界だけである。受け取ったら、すぐに具象型か generics に戻す。`map[string]any` を業務のデータ構造に使わない。`any` は型の検査を実行時へ先送りする。
+`any` を使うのは、JSON の decode、`slog` の属性値、`sql.Scanner` のように、値の型が実行時まで決まらない境界だけである。受け取ったら、すぐに具象型か generics に戻す。`map[string]any` を業務のデータ構造に使わない。`any` を使うと、型の検査が実行時まで先送りになる。
 
 ## generics は、同じアルゴリズムを複数の型に使うときだけ
 

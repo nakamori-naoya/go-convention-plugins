@@ -28,7 +28,7 @@ internal/
 
 **文脈共有の値オブジェクト**は、`internal/shared/vo` に置く。どの値が文脈共有かは、ドメインモデルの資料がクラス図の `<<値オブジェクト・文脈共有>>` の印で示す。印の付いた値を一つの集約の `domain` に置くと、別の集約や別のプロセスが、その集約の `domain` を import することになるからである。印の無い値オブジェクトは、その集約の `domain` に置く。識別子が多いなら、`shared/vo/id` のように分けてよい。
 
-**プロセス間のメッセージの契約**（Outbox の要求、配信のメッセージ）は、`internal/contracts/{message}` に置く。送る側のプロセスと受ける側のプロセスが、同じ契約の型を import する。
+**プロセス間のメッセージの契約**（業務の変更と同じトランザクションで記録し、別のプロセスが後で送る Outbox の要求と、配信のメッセージ）は、`internal/contracts/{message}` に置く。送る側のプロセスと受ける側のプロセスが、同じ契約の型を import する。
 
 **横断的関心事**は、`internal/crosscutting` に置く。業務の概念を import しない。
 
@@ -36,7 +36,7 @@ internal/
 
 ## テスト支援
 
-Builder は、それが組み立てる実装の直下の `builders/` に置く（`shared/vo/builders`、`{aggregate}/domain/builders`、`{aggregate}/repository/builders`）。mock は、interface を所有する package の直下の `mock/` に置く。本番のコードは、`builders` と `mock` を import しない。
+テストの前提データを組み立てる Builder は、組み立てる対象の実装の直下の `builders/` に置く（`shared/vo/builders`、`{aggregate}/domain/builders`、`{aggregate}/repository/builders`）。mock は、interface を所有する package の直下の `mock/` に置く。本番のコードは、`builders` と `mock` を import しない。
 
 # import の向き
 
@@ -46,15 +46,15 @@ import は、外側から内側へだけ向かう。
 
 `repository` は、`domain`、`shared/vo`、`crosscutting`（rdb、tx、errors、clock、idgen）、DB の生成型を import する。usecase、query、handler を import しない。
 
-`usecase/command` は、`domain`（ポートと型）、`shared/vo`、`crosscutting`（tx、errors、idgen）、外部の境界のポート（usecase/command が所有する）を import する。**`usecase/query` と `query` を import しない。** command は読み取りの口を呼ばないからである。判断の材料は、`domain` の Find が集める。
+`usecase/command` は、`domain`（ポートと型）、`shared/vo`、`crosscutting`（tx、errors、idgen）、外部の境界のポート（usecase/command が所有する）を import する。**`usecase/query` と `query` を import しない。** command は読み取りのポートを呼ばないからである。コマンドの判断に要る値（材料）は、`domain` の永続化ポートの Find が集める。
 
 `usecase/query` は、読み取りのポートと読み取りモデルを所有し、`shared/vo` と `domain` の値オブジェクトだけを使う。`query` の実装を import しない。
 
 `query` は、`usecase/query` の契約、`shared/vo`、`domain` の値オブジェクト、`crosscutting`（rdb、errors）、DB の生成型を import する。集約を復元せず、操作しない。
 
-`handler` は、`usecase/command` と `usecase/query`、転送の型を import する。リポジトリと query の実装は、組み立ての場所（`run`）だけが import する。巡回のように、一つの入口が query の usecase で候補を選び、一件ごとに command の usecase を呼ぶのはよい。ループと失敗の閉じ込めは、入口が持つ。
+`handler` は、`usecase/command` と `usecase/query`、proto から生成した要求と応答の型を import する。リポジトリと query の実装は、組み立ての場所（`run`）だけが import する。ワーカーの巡回のように、一つの入口（外からの要求やタイマーを受けて usecase を呼ぶ層）が query の usecase で候補を選び、一件ごとに command の usecase を呼ぶのはよい。ループと失敗の閉じ込めは、その入口が持つ。
 
-`{procedure}/usecase` は、自分が所有するポート（リポジトリ相当の口、外部の副作用の口）と、`contracts`、`shared/vo`、`crosscutting`（tx、errors）を import する。DB の生成型と pgx を import しない。`{procedure}/repository` がポートを実装する。
+`{procedure}/usecase` は、自分が所有するポート（DB への保存と読み込みを受け持つ interface、外部へ送るなど副作用を起こす interface）と、`contracts`、`shared/vo`、`crosscutting`（tx、errors）を import する。DB の生成型と pgx を import しない。`{procedure}/repository` がポートを実装する。
 
 # package の名前
 
@@ -66,6 +66,6 @@ directory の末尾と package の名前を一致させる。`domain`、`reposit
 
 似て非なる例：延滞の通知の要求は、貸出の集約の `domain` の値ではなく、延滞にするプロセスと通知を発行するプロセスの間のメッセージなので、`internal/contracts/overduenotice` に置く。
 
-反例：command の usecase が、候補の一覧を読むために `usecase/query` を import する。材料は Find が集め、一覧を選んで一件ずつ呼ぶのは入口の仕事なので、拒否する。
+反例：command の usecase が、候補の一覧を読むために `usecase/query` を import する。判断に要る値はリポジトリの Find が集め、一覧から選んで一件ずつ呼ぶのは入口の仕事なので、拒否する。
 
 境界例：資料が「貸出と在庫を同じ時点で更新する」と定めたときだけ、その command を `orchestration/usecase/command` に置く。資料が時間差を許すなら、発生元の集約の command が Outbox の要求を同じトランザクションで記録し、別の手順が処理する。
