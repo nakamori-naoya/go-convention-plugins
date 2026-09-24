@@ -1,208 +1,139 @@
 # 型と interface
 
-**型は「不正な値を作れない」ように設計し、interface は「使う側が要る分だけ」定義する。** 抽象は要るところにだけ置き、具象は名前で読める形で返す。
+型は「不正な値を作れない」ように作り、interface は「使う側が要る分だけ」切る。抽象は要るところにだけ置き、具象は名前で読める形で返す。
 
-## 1. interface は使う側で小さく定義し、実装側は struct を返す
+# 業務の概念を型にする
 
-**する:** interface は、それを引数に取る package が、そこで呼ぶメソッドだけを持つ形で定義する。実装側の package は具象の struct（ポインタ）を返す。呼び出し側で interface に代入する。
-**しない:** 実装側で「この型ができること全部」の interface を export する。1 メソッドしか呼ばないのに 6 メソッドの interface に依存する。同じ package の具象型や、内向きに依存して済む相手を、差し替えも依存方向の理由も無く interface で包む。
+## 値オブジェクト
+
+業務や運用の意味を持つ値は、非公開フィールドの struct と、検証する `New*` で表す。値の形が条件を満たさなければ、`New*` が error を返す。構造体のフィールド、引数と戻り値、イベント、usecase の入出力、読み取りモデル、テストデータのどこでも、その概念を `string`、整数、浮動小数、`bool`、`time.Time` のまま持たない。
 
 ```go
-// package usecase（使う側）。ID の採番と読み取りは usecase が要る分だけ定義する
-type IDGenerator interface {
-	NewReservationID() (reservation.ID, error)
+// UserNo は、図書館が利用者に振る利用者番号である。例: "U-000123"。
+type UserNo struct {
+	v string
 }
 
-type HoldReservation struct {
-	tx      *tx.Manager
-	repo    reservation.Repository
-	active  ActiveReservationReader
-	noShows NoShowReader
-	ids     IDGenerator
+func NewUserNo(s string) (UserNo, error) {
+	if !userNoPattern.MatchString(s) {
+		return UserNo{}, ErrUserNoMalformed
+	}
+	return UserNo{v: s}, nil
 }
 
-// package handler（使う側）。時刻の取得は handler が要る分だけ定義し、usecase の入力の At に入れる
+func (n UserNo) Value() string {
+	return n.v
+}
+```
+
+向きで分けて考える。外から入ってくる値（要求、外部サービスの応答、設定）は、境界で値オブジェクトへ変換する。外部サービスの応答を写した型も例外にしない。外部の契約であることは、その値がサービスの中でどの概念かを型で言い表さない理由にならない。ポートの interface の引数と戻り値にも、プリミティブを置かない。
+
+外へ出す写しは逆向きである。プリミティブへ戻すのは、外部の形式（DB の生成型、proto、ログの属性）へ写す変換の内側だけである。ログの属性へは、記録する行で値を取り出して渡し、何を出すかをその行で決める（write-logs が定める）。値オブジェクトは `slog.LogValuer` も `String()` も実装しない。
+
+値オブジェクトを作る前に、同じ意味の型が既にないかを探す。複数の文脈で使う値オブジェクトの置き場は、apply-go-package-layout が決める。
+
+## 取りうる値が有限なら、封じた型にする
+
+状態、種別、方式のように取りうる値が有限なら、非公開フィールドを一つ持つ struct と、その package 変数で表す。package の外から新しい値を作れないので、列挙の外の値は存在しない。文字列との往復は `Parse<型>(s string) (<型>, error)` と `Value() string` で行い、`Parse` は知らない文字列を error で返す。
+
+```go
+type Status struct{ v string }
+
+var (
+	StatusOnLoan   = Status{"on_loan"}
+	StatusOverdue  = Status{"overdue"}
+	StatusReturned = Status{"returned"}
+)
+
+func ParseStatus(s string) (Status, error) {
+	switch s {
+	case StatusOnLoan.v:
+		return StatusOnLoan, nil
+	case StatusOverdue.v:
+		return StatusOverdue, nil
+	case StatusReturned.v:
+		return StatusReturned, nil
+	default:
+		return Status{}, ErrUnknownStatus
+	}
+}
+```
+
+`type Status string` と `const` の組は使わない。型変換で列挙の外の値を作れ、`switch` の網羅を lint に頼ることになるからである。封じた型は、不正な値を作れないので、検査そのものが要らない。値は一か所で定義し、変換やテストの期待値でも同じ package 変数を使う。同じ文字列を別の場所で繰り返さない。
+
+## 状態の和は、封じた interface にする
+
+「A または B または C」は、非公開メソッドを一つ持つ interface と、それを実装する型で表す。非公開メソッドがあるので、package の外の型は実装できず、和が閉じる。`gochecksumtype` に網羅を検査させるため、interface の宣言に `//sumtype:decl` を付ける。どの型を和にし、和にどのメソッドを置くかは、implement-domain-model が決める。
+
+`Kind` フィールドと全状態のフィールドを一つの struct に持つ形にはしない。どの状態でどのフィールドが有効かが、型で分からなくなる。
+
+## ゼロ値
+
+値オブジェクトと集約のゼロ値は無効で、作るのは `New*` と `Restore*` だけである。設定、バッファ、カウンタのような道具の型は、`strings.Builder` や `sync.Mutex` と同じく、ゼロ値のまま使える形にする。どちらの型かは、それが業務の概念か、それを支える道具かで決まる。
+
+## 型エイリアス
+
+別の型として区別したいなら、defined type（しかも非公開フィールドの struct）にする。`type UserNo = string` のようなエイリアスは、`string` と互換なので取り違えを検出できない。エイリアスは、型の移動の途中のように、同じ型に別の名前が要るときだけに使う。
+
+# interface
+
+## 使う側で小さく切り、実装側は struct を返す
+
+interface は、それを引数に取る package が、そこで呼ぶメソッドだけを持つ形で定義する。実装の package は具象の struct（のポインタ）を返し、呼び出し側で interface に代入する。実装側で「この型ができること全部」の interface を公開しない。同じ package の具象型や、内向きに依存して済む相手を、理由無く interface で包まない。
+
+interface が要る理由は二つしかない。依存の向きを内向きに保つため（実装の package を import しない）と、テストで差し替えるため（差し替えてよい境界だけ。apply-go-test-convention が決める）である。どちらも無い interface は、型を一つ増やすだけで、検査できることが増えない。
+
+実装しているかは、実装側で一行、コンパイル時に確かめる。
+
+```go
+var _ domain.LoanRepository = (*LoanRepository)(nil)
+```
+
+## 例外は三つ
+
+**集約の永続化ポート**は、集約と同じ package（ドメイン）が定義する。偽物を作らないテスト方針では、使う側で切る利点が消え、契約を集約ごとに一か所へ置く利点が勝つからである。
+
+**状態の和**は、状態の型を定義する package が定義する。和を閉じるのは、型を定義する package の仕事だからである。
+
+**差し替えるためだけにある技術境界**（時計、採番器）の interface は、それを所有する横断的関心事の package に一つだけ置く。使う側の数だけ interface や mock を増やしても、守られるものが無いからである。
+
+```go
+// clock は、現在時刻の取得を差し替えられるようにする。
+package clock
+
+//go:generate go run go.uber.org/mock/mockgen -source=clock.go -destination=mock/clock.go -package=mock_clock
+
 type Clock interface {
 	Now() time.Time
 }
-
-// package rdb（実装側）。struct のポインタを返す。interface を返さない
-func NewReservationRepository() *ReservationRepository {
-	return &ReservationRepository{}
-}
 ```
 
-**例外を 2 つだけ置く。集約の永続化ポート（リポジトリの interface）と、状態の和型（sealed interface）はドメイン（集約と同じ package）が定義する。**
+採番器は、業務の概念をまだ持たない UUID だけを返し、使う側がその場で識別子の値オブジェクトへ変換する。識別子の種類ごとに採番器やメソッドを増やさない。
 
-```go
-// package reservation（ドメイン）が定義する。usecase はこれに依存し、rdb がこれを実装する
-type Repository interface {
-	FindByID(ctx context.Context, id ID) (Reservation, error)
-	ApplyHeld(ctx context.Context, evt Held) error
-	ApplyConfirmed(ctx context.Context, evt ConfirmedEvent) error
-	ApplyCancelled(ctx context.Context, evt CancelledEvent) error
-	ApplyExpired(ctx context.Context, evt ExpiredEvent) error
-	ApplyNoShowRecorded(ctx context.Context, evt NoShowRecorded) error
-}
-```
+外部サービスの照会のように、制御できない外部の境界のポートは、使う側が所有する（原則どおり）。
 
-理由: 使う側で定義すれば、interface は呼ぶメソッドだけを持ち、テストや差し替えの単位が「この関数が要るもの」に一致する。永続化ポートが例外なのは、偽物を作らないテスト方針では「使う側で切る利点」が消え、契約を集約ごとに 1 か所へ置く利点が勝つからである。和型が例外なのは、和を閉じるのが型を定義する package の仕事だからである（§6）。ポートと和型の中身はドメインモデルの規約が決める。interface が要る理由は依存方向（実装 package を import しない）か差し替え（採番・時計など環境で差し替えるもの）のどちらかで、どちらも無い interface は型を 1 つ増やすだけで検査できることが増えない。
+## interface と実装は、ファイルを分ける
 
-### 実装しているかをコンパイル時に確かめる
+interface は、自分の名前のファイル（`Clock` なら `clock.go`、`NoticePublisher` なら `notice_publisher.go`）に単独で置く。そのファイルに置くのは、`go:generate`（mock の生成元）と、その契約に固有のエラーだけである。実装する型は、その型の名前のファイル（`System` なら `system.go`）に置く。生成コードは対象外である。
 
-```go
-// package rdb
-var _ reservation.Repository = (*ReservationRepository)(nil)
-```
+こうすると、契約と実装を別々に読め、契約だけを変える差分と実装だけを変える差分が混ざらない。
 
-理由: メソッドの綴りを間違えても、interface に代入する行が遠い package にあると、そこまでコンパイルが通ってしまう。実装側の 1 行で止める。
+## 関数型で足りるなら interface にしない
 
-## 2. `any` は真に多相な境界だけ
+呼び出し側が振る舞いを一つだけ要し、状態を持たないなら、関数型（`func(ctx context.Context) error`）にする。状態を持つか、複数の実装を名前で区別したいときだけ interface にする。
 
-**する:** `any` を使うのは、値の型が実行時まで決まらない境界（JSON の decode、`slog` の属性値、`sql.Scanner`）だけ。受け取ったら直ちに具象型か generics に戻す。
-**しない:** 引数や戻り値を `any` にして「何でも受ける」関数を書く。`map[string]any` を業務のデータ構造に使う。`interface{}` と綴る。
+# any、generics、埋め込み
 
-理由: `any` は型検査を実行時へ先送りする。呼び出し側は何を渡せるか分からず、受け取り側は型アサーションを書き、どちらの誤りもコンパイルで止まらない。
+## `any` は、値の型が実行時まで決まらない境界だけ
 
-## 3. generics は「同じアルゴリズムを複数の型に」だけ
+`any` を使うのは、JSON の decode、`slog` の属性値、`sql.Scanner` のように、値の型が実行時まで決まらない境界だけである。受け取ったら、すぐに具象型か generics に戻す。`map[string]any` を業務のデータ構造に使わない。`any` は型の検査を実行時へ先送りする。
 
-**する:** 型パラメータを使うのは次の 2 つのどちらかのとき。
-1. 同じアルゴリズムを複数の型に適用する（`slices.SortFunc` のような操作）
-2. 型ごとに同じ補助型を量産しないため（題材の遷移結果型）
+## generics は、同じアルゴリズムを複数の型に使うときだけ
 
-```go
-// 2 の例。状態ごとに ConfirmResult / CancelResult ... の struct を 5 つ書く代わりに 1 つの generic 型
-type Transition[S Reservation, E Event] struct {
-	Next  S
-	Event E
-}
+型パラメータを使うのは、同じアルゴリズムを複数の型に適用するとき（`slices.SortFunc` のような操作）だけである。使う型が一つしか無いのに型パラメータを付けない。メソッドを持たない入れ物を generics で作らない（集約のコマンドの結果は、コマンドごとの具体の struct にする）。振る舞いの違いは interface で、型の違いは generics で表す。
 
-type ConfirmResult = Transition[Confirmed, ConfirmedEvent]
-type CancelResult = Transition[Cancelled, CancelledEvent]
-```
+Go 1.27 からメソッドが自分の型パラメータを持てる（ジェネリックメソッド）が、既定では使わない。package 関数で書けるものは、package 関数で書く。ツールの対応が追いついておらず、package 関数なら従来の知識で読めるからである。
 
-**しない:** 使う型が 1 つしか無いのに型パラメータを付ける。interface で足りる場面に generics を使う（振る舞いの差は interface、型の差は generics）。制約 interface を実装側 package に export して依存を作る。
+## struct を埋め込んで実装を共有しない
 
-理由: generics は読み手に型の代入を頭の中でさせる。具象型で書けるなら具象型が最も読める。
-
-### ジェネリックメソッド（Go 1.27）
-
-Go 1.27 からメソッドが自分の型パラメータを持てる。**既定では使わない。** 使うのは、型パラメータがレシーバの型ではなく引数だけで決まり、package 関数にすると名前が `{型}{動詞}` になって型名を繰り返す 1 行の変換に限る。それ以外は従来どおり package 関数（`func Map[T, U any](s []T, f func(T) U) []U`）に置く。
-
-理由: 1.27 で入ったばかりの機能で、ツール（lint・IDE）の対応が追いついていない。package 関数で書けるものを package 関数で書けば、移行も検索も従来の知識で足りる。
-
-## 4. 型パラメータの自己参照制約（Go 1.26）
-
-Go 1.26 から `type Adder[A Adder[A]] interface{ Add(A) A }` のように制約が自分を参照できる。使うのは「同じ型同士の演算」を generic に書くときだけ。題材には現れない。
-
-## 5. 列挙は封じた struct ＋ package 変数
-
-**する:** 列挙は非公開フィールドを 1 つ持つ struct と、その package 変数で表す。文字列との往復は `Parse{型}(s string) ({型}, error)` と `{型}.Value() string`。`switch` の `default` は `error` を返す。
-**しない:** `type Kind int` / `type Kind string` の defined basic type ＋ `const ( ... iota )`。`default` で既定値に丸める。`default` で `panic` する。
-
-```go
-// しない: Kind(42) や Kind("unknown") で列挙の外の値を作れる
-type Kind string
-
-const (
-	KindTentative Kind = "tentative"
-	KindConfirmed Kind = "confirmed"
-)
-
-// する: package 外から Kind{"x"} は書けない（フィールドが非公開）。値は package 変数だけ
-type Kind struct{ v string }
-
-var (
-	KindTentative = Kind{"tentative"}
-	KindConfirmed = Kind{"confirmed"}
-	KindCancelled = Kind{"cancelled"}
-	KindExpired   = Kind{"expired"}
-)
-
-var ErrUnknownKind = errors.New("予約の種別が不明")
-
-func ParseKind(s string) (Kind, error) {
-	switch s {
-	case KindTentative.v:
-		return KindTentative, nil
-	case KindConfirmed.v:
-		return KindConfirmed, nil
-	case KindCancelled.v:
-		return KindCancelled, nil
-	case KindExpired.v:
-		return KindExpired, nil
-	default:
-		return Kind{}, ErrUnknownKind
-	}
-}
-
-func (k Kind) Value() string { return k.v }
-func (k Kind) IsZero() bool  { return k == Kind{} }
-```
-
-理由: defined basic type は型変換で列挙の外の値を作れ、`switch` の網羅を lint（`exhaustive`）に頼ることになる。封じた struct は不正な値を**作れない**ので、検査そのものが要らない。`default` で丸めると DB の壊れた行が正常な種別として通る。`panic` すると境界でエラーに翻訳できない。
-
-## 6. 型の和は sealed interface
-
-**する:** 「A または B または C」は、非公開メソッドを 1 つ持つ interface と、それを実装する型で表す。非公開メソッドがあるので package 外の型は実装できない（和が閉じる）。型スイッチは実装する型を全部列挙し、`default` に来るのは nil だけなので sentinel（`ErrNoReservation`）を返す。`gochecksumtype` に網羅を検査させるため interface 宣言に `//sumtype:decl` を付ける。
-**しない:** `Kind` フィールド ＋ 全状態のフィールドを 1 struct に持つ（どの状態でどのフィールドが有効かが型で分からない）。公開メソッドだけの interface（package 外で勝手に実装される）。
-
-```go
-//sumtype:decl
-type Reservation interface {
-	ID() ID
-	Customer() CustomerID
-	Slot() TimeSlot
-	Version() Version
-	isReservation()
-}
-
-func AsTentative(r Reservation) (Tentative, error) {
-	switch v := r.(type) {
-	case Tentative:
-		return v, nil
-	case Confirmed:
-		return Tentative{}, ErrAlreadyConfirmed
-	case Cancelled:
-		return Tentative{}, ErrAlreadyCancelled
-	case Expired:
-		return Tentative{}, ErrAlreadyExpired
-	default:
-		return Tentative{}, ErrNoReservation
-	}
-}
-```
-
-どの型を和にし、どの操作をどの型に置くかはドメインモデルの規約が決める。ここでは Go での表し方だけを決める。
-
-理由: 型で状態を分けると、「確定済みに確定を呼ぶ」はメソッドが無いのでコンパイルで止まる。`Kind` フィールド方式は全操作が全状態で呼べてしまい、状態違いの検査を全メソッドに書くことになる。
-
-## 7. ゼロ値が有効な基盤型は、ゼロ値のまま使える設計にする
-
-**する:** 設定・バッファ・カウンタ・オプションのような基盤型は、`var b strings.Builder` / `var mu sync.Mutex` と同じく、ゼロ値で使えるようにする（フィールドのゼロ値が「既定の振る舞い」になる形にする。ただし §基本 の「暗黙の既定」とは違い、ゼロ値が意味を持つ型として文書化する）。
-**しない:** コンストラクタを呼ばないと `nil` map に書き込んで panic する基盤型。
-
-ドメインの値オブジェクトと集約はこの規則の対象外で、ゼロ値は無効（生成は `New*` / `Restore*` だけ）。どちらの型なのかは、その型が業務の概念か、それを支える道具かで決まる。
-
-理由: Go はゼロ値を避けられない（`var x T`、struct のフィールド、map の欠損）。道具の型がゼロ値で使えれば、呼び忘れの `New` が無くなる。業務の型はゼロ値を無効にしなければ「空の予約」が生まれる。
-
-## 8. 埋め込み
-
-**する:** interface の埋め込みで役割を合成する（`type Active interface { Reservation; Cancel(...) }`）。
-**しない:** struct の埋め込みで実装を共有する。埋め込んだ型の公開メソッドが外側の型の API に昇格し、意図しないメソッドが公開される。`sync.Mutex` を埋め込む（`Lock` / `Unlock` が公開される）。
-
-理由: struct 埋め込みは「is-a」に見えて継承ではなく、API の漏れを作る。共有したい実装は非公開の関数に切り出して呼ぶ。
-
-## 9. 型エイリアスと defined type
-
-**する:** `type HoldResult = Transition[Tentative, Held]` のように、generic 型の具体化に名前を付けるときだけ型エイリアス（`=`）を使う。別の型として区別したいなら defined type（`type ID struct{ v string }`）。
-**しない:** `type UserID = string` のようなエイリアスで型を「名付けただけ」にする（`string` と互換なので取り違えを検出できない）。
-
-理由: エイリアスは同じ型の別名で、型検査上は何も足さない。区別が要るなら defined type、しかも defined basic type ではなく非公開フィールドの struct（§5 と同じ理由）。
-
-## 10. 関数型と 1 メソッド interface
-
-**する:** 呼び出し側が「振る舞い 1 つ」しか要らず、状態を持たないなら関数型（`func(ctx context.Context) error`）。状態を持つか、複数の実装を名前で区別したいなら interface。
-**しない:** 関数型で足りるところに 1 メソッド interface と実装 struct を作る。
-
-理由: `tx.Manager.Run(ctx, func(ctx context.Context) error)` のような 1 回きりの処理に interface と struct を作ると、型が 2 つ増えて呼び出し側の行数が増えるだけで、検査できることは増えない。
+struct を埋め込むと、埋め込んだ型の公開メソッドが外側の型の API に昇格し、意図しないメソッドが公開される。共有したい実装は、非公開の関数に切り出して呼ぶ。`sync.Mutex` はフィールドに持ち、埋め込まない。interface の埋め込みで役割を合成するのはよい。
