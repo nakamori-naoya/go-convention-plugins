@@ -30,7 +30,6 @@ description: domain-model 資料（要素一覧・各要素の詳細・状態と
 | 2 | 集約と typestate | 状態ごとの型と封じた和型。操作は状態型の値レシーバで `(Transition[Next, Event], error)`。拒まないが変えない操作は `(Result, bool)`。絞り込み `As*`、復元 `Restore*`。拒む理由は sentinel。時刻と ID は引数。永続化ポートは集約の package に 1 つ | [aggregate-typestate.md](references/aggregate-typestate.md) |
 | 3 | ドメインイベント | 集約ごとに封じた和型。1 操作 1 イベントを遷移結果型で返す。版と発生時刻を持つ。状態名と衝突すれば `Event` 接尾辞 | [events.md](references/events.md) |
 | 4 | 資料からの導き方 | 要素 → 型、持つもの → フィールド、生成の条件 → `New` / 生成関数、操作 → メソッド、拒む理由 → sentinel、状態と型の分割 → typestate。資料に無いコマンドを作らない。許す例外は `Restore*` / `As*` / getter / 遷移結果型 / イベント型の版 | [from-domain-model-doc.md](references/from-domain-model-doc.md) |
-| 5 | 題材の完全な例 | 貸会議室予約の集約「予約」を写した package `reservation` の全コード | [example-reservation.md](references/example-reservation.md) |
 
 ### する／しない
 
@@ -47,7 +46,7 @@ description: domain-model 資料（要素一覧・各要素の詳細・状態と
 
 ## 手順
 
-1. **資料を読み、対応表を作る。** `references` があれば先に読む。domain-model 資料の要素一覧・各要素の詳細・状態と型の分割・ドメインイベントを読み、要素ごとに Go の型名、操作ごとにメソッド名と返り値の形、拒む理由ごとに sentinel 名を表にする（[example-reservation.md](references/example-reservation.md) 冒頭の表の形）。完了条件: 資料の要素・操作・拒む理由の全行に Go の名前が付き、資料に無い名前が表に無い
+1. **資料を読み、対応表を作る。** `references` があれば先に読む。domain-model 資料の要素一覧・各要素の詳細・状態と型の分割・ドメインイベントを読み、要素ごとに Go の型名、操作ごとにメソッド名と返り値の形、拒む理由ごとに sentinel 名を表にする。完了条件: 資料の要素・操作・拒む理由の全行に Go の名前が付き、資料に無い名前が表に無い
 2. **値オブジェクトを書く。** 識別子、資料の VO の順。「持つもの」をフィールド、「生成の条件」を `NewX`、「操作」を判定・計算メソッドにする。完了条件: 全 VO が非公開フィールド・`NewX`・getter を持ち、`error` を返すのは拒む組があるものだけ
 3. **集約を書く。** 「状態と型の分割」から和型・状態型・部分和型を書き、`core` と状態型にフィールドを分け、「操作: X」ごとにメソッドを置く。事前条件は資料の順、事後条件は `Next`、発するイベントは `Event`。完了条件: 状態型の数が資料の「分ける」の数と一致し、各状態型のメソッドが「できる操作」の列と一致する
 4. **sentinel とイベントを書く。** 「拒む理由」と「生成の条件」から sentinel、「発するイベント」からイベント型。完了条件: sentinel の行末コメントから資料の行へ戻れ、イベント型の数が資料の表の行数と一致する
