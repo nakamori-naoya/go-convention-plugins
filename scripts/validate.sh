@@ -3,7 +3,7 @@
 # Given: 両runtimeのmarketplaceと同一のmanifest、直接公開する18のskill（skills/<name>）、
 #        各skillのreference、check-cases.py、tests/examplesのGoモジュールがある
 # When: root契約（package境界・内部skillの自己完結）、identity、入口と内部skillの対応、reference到達性、例と断片の一致、
-#       check-cases.pyの正常系・正例・負例、develop-<layer>のTDD工程順、shell構文、goのgofmt・vet・shuffleテストを実行する
+#       check-cases.pyの正常系・正例・負例、check-bdd-coverage.pyの正例・反例・境界例、develop-<layer>のTDD工程順、shell構文、goのgofmt・vet・shuffleテストを実行する
 # Then: 不整合が一つでもあれば非0で終了する。兄弟checkout harness-tools が無ければ止まる。goが無ければgofmt・vet・testは省略と表示し失敗にしない
 set -uo pipefail
 
@@ -292,6 +292,70 @@ mutated_case "Testと同じidを持つBenchmark（併合しない）" benchmark-
 mutated_case "被験体のidフィールド（ケースと見なさない）" sut-id-ignored accept
 mutated_case "エスケープした引用符を含むname" escaped-quote-name accept
 mutated_case "TestMainだけを持つmain_test.go（Test*として扱わない）" testmain-accepted accept
+
+# check-bdd-coverage.py（repository 全体の BDD の追跡）: tests/bdd-coverage を正例に、1 点だけ変えた複製を反例・境界例にする
+BDD_CHECK="$SKILL/scripts/check-bdd-coverage.py"
+BDD_FIXTURE="$ROOT/tests/bdd-coverage"
+BDD_DOC="docs/lending/業務知識.md"
+if python3 "$BDD_CHECK" "$BDD_FIXTURE" "$BDD_DOC" >"$TMP_ROOT/bdd.out" 2>&1; then
+  pass "check-bdd-coverage.py: 資料の各 BDD が宣言した資料のテストの id: か列挙にちょうど 1 回現れる（接頭辞付きの ID を含む）"
+else
+  cat "$TMP_ROOT/bdd.out"; fail "check-bdd-coverage.py: tests/bdd-coverage"
+fi
+bdd_mutated() {
+  local label=$1 key=$2 expect=$3 needle=${4:-} dir="$TMP_ROOT/bdd-$2"
+  rm -rf "$dir"; cp -R "$BDD_FIXTURE" "$dir"
+  python3 - "$dir" "$key" <<'PY'
+from pathlib import Path
+import sys
+root, key = Path(sys.argv[1]), sys.argv[2]
+domain = root / "lending/loan/domain/pending_loan_test.go"
+usecase = root / "lending/loan/usecase/mark_overdue_test.go"
+def edit(path, old, new):
+    text = path.read_text()
+    if old not in text:
+        raise SystemExit(f"変更の元になる文字列が無い: {key}")
+    path.write_text(text.replace(old, new, 1))
+if key == "duplicate-across-packages":
+    edit(usecase, '"5d2a90"', '"BDD-001"')
+elif key == "missing":
+    edit(domain, '"BDD-003"', '"9e41b7"')
+elif key == "no-declaration":
+    edit(domain, "// BDD の資料: docs/lending/業務知識.md\n", "")
+elif key == "unknown-id":
+    edit(domain, '"BDD-003"', '"BDD-099"')
+elif key == "unowned-listed":
+    edit(domain, '"BDD-003"', '"9e41b7"')
+    domain.write_text(domain.read_text() + "\n// どのテストも担わない BDD:\n// BDD-003 上限は物理設計の制約が守り、どの Go のテストでも再現しない\n")
+elif key == "unowned-without-reason":
+    edit(domain, '"BDD-003"', '"9e41b7"')
+    domain.write_text(domain.read_text() + "\n// どのテストも担わない BDD:\n// BDD-003\n")
+elif key == "unowned-not-last":
+    edit(domain, '"BDD-003"', '"9e41b7"')
+    domain.write_text(domain.read_text() + "\n// どのテストも担わない BDD:\n// BDD-003 理由\n\nfunc TestLater(t *testing.T) {}\n")
+elif key == "both-id-and-list":
+    domain.write_text(domain.read_text() + "\n// どのテストも担わない BDD:\n// BDD-003 理由\n")
+PY
+  python3 "$BDD_CHECK" "$dir" "$BDD_DOC" >"$dir.out" 2>&1
+  local code=$?
+  if [ "$expect" = accept ]; then
+    [ "$code" -eq 0 ] && pass "check-bdd-coverage.py が${label}を受理" || { cat "$dir.out"; fail "check-bdd-coverage.py が${label}を拒否"; }
+  elif [ "$code" -ne 1 ]; then
+    cat "$dir.out"; fail "check-bdd-coverage.py が${label}を拒否しない（終了コード $code）"
+  elif [ -n "$needle" ] && ! rg -F "$needle" "$dir.out" >/dev/null; then
+    cat "$dir.out"; fail "check-bdd-coverage.py が${label}を別の理由で拒否"
+  else
+    pass "check-bdd-coverage.py が${label}を拒否"
+  fi
+}
+bdd_mutated "別の package の同じ BDD（主に担うテストが二つ）" duplicate-across-packages reject "か所に現れる"
+bdd_mutated "どこにも現れない BDD" missing reject "どのテストの id: にも"
+bdd_mutated "資料の宣言の無いファイル" no-declaration reject "宣言が 0 個"
+bdd_mutated "資料に無い ID" unknown-id reject "見出しに無い"
+bdd_mutated "id と列挙の両方に現れる BDD" both-id-and-list reject "か所に現れる"
+bdd_mutated "理由の無い列挙" unowned-without-reason reject "理由が無い"
+bdd_mutated "最後に無い列挙" unowned-not-last reject "ファイルの最後に置く"
+bdd_mutated "どのテストも担わない BDD の列挙（境界例）" unowned-listed accept
 
 # develop-<layer>（TDDの1単位）: 同packageの公開入口を skill: で、テスト → 赤 → 実装 → 緑 → 整える の順に呼ぶ
 tdd_order_check() {

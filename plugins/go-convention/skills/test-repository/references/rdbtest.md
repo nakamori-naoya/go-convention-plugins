@@ -8,7 +8,7 @@
 
 | 項目 | 規則 |
 |---|---|
-| package | `rdb/rdbtest`（Go の慣習 `{pkg}test`）。ファイルは `start.go`（`Start` / `DB`。[dockertest-and-testmain.md](dockertest-and-testmain.md) §1）と `rdbtest.go`（`Reset` / `Run` / `Seed*` / `Read*`）の 2 つ。集約が増えてテーブルが増えたら、集約ごとに `{aggregate}.go` に分ける |
+| package | `rdb/rdbtest`（Go の慣習 `{pkg}test`）。ファイルは `start.go`（`Start` / `DB`。起動の形は apply-go-test-convention の実 DB の規則）と `rdbtest.go`（`Reset` / `Run` / `Seed*` / `Read*`）の 2 つ。集約が増えてテーブルが増えたら、集約ごとに `{aggregate}.go` に分ける |
 | 行型 | sqlc の生成型（`sqlcgen.Reservation` 等）をそのまま使う。独自の行型を作らない |
 | query | `rdb/query/rdbtest.sql` に置き、本番と同じ `sqlc.yaml` で `rdb/sqlcgen` へ生成する。本番の query ファイル（`rdb/query/reservation.sql`）には足さない |
 | 投入 | `pgx` の `CopyFrom`。SQL 文を組み立てない |

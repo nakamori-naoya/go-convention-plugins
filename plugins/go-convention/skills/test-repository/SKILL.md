@@ -27,7 +27,7 @@ description: 永続化層（集約のリポジトリと query service）のテ�
 | # | 柱 | 一言で | 基準資料 |
 |---|---|---|---|
 | 1 | 何をテストするか | 資料の BDD ごとの状態変化を全テーブル全行で（絶対規則）。復元と保存の往復、DB 制約違反の翻訳、楽観ロック競合、同時実行、NotFound。集約が拒むシナリオ・業務ルール・SQL の文言・marshaller 単体・ログは書かない | [what-to-test.md](references/what-to-test.md) |
-| 2 | 実 DB | dockertest の起動は `rdbtest.Start` の 1 点。`main_test.go` の `TestMain` が `Start` → `m.Run()` → `Close` → `os.Exit` を書き、package 変数 `pool` を共有。起動失敗はテスト失敗。直列 | [dockertest-and-testmain.md](references/dockertest-and-testmain.md) |
+| 2 | 実 DB | dockertest で起動した実 PostgreSQL を使う。起動の基盤、試行ごとの期限付きの起動待ち、`main_test.go`、直列は apply-go-test-convention の実 DB の規則に従う | apply-go-test-convention |
 | 3 | rdbtest | `rdb/rdbtest` に `Start` / `Reset` / `Run` / テーブルごとの `Seed{Table}` / `Read{Table}`。行型は sqlc の生成型、query は `rdb/query/rdbtest.sql`。テスト本文に SQL を書かない | [rdbtest.md](references/rdbtest.md) |
 | 4 | テーブルの形 | `seed{Table}` × 全テーブル、When の引数、`wantErr`、`want{Table}` × 全テーブル。書かないテーブルは空と一致。同時実行は When をスライスにして 2 本並走 | [table-shape.md](references/table-shape.md) |
 | 5 | query service | Before を投入 → 読み取り → DTO を `assert.Equal`。フィルタ・ページング・NULL・空の 4 観点。全テーブルの突き合わせは要らない | [query-service-test.md](references/query-service-test.md) |
@@ -37,17 +37,16 @@ description: 永続化層（集約のリポジトリと query service）のテ�
 ## 手順
 
 1. **資料と対象を揃える。** `references` があれば先に読む。データモデル資料の「シナリオと記録の対応」と BDD の Before/After、リポジトリ（または query service）の公開メソッド（テストが先なら `Repository` interface または読み取りポートのメソッドと、実装の規約から決めたコンストラクタ名）を並べる。完了条件: 資料の全テーブルが列挙され、テーブルごとに `sqlcgen` の行型が 1 つ対応している
-2. **`rdbtest` と `main_test.go` を用意する。** 無ければ [dockertest-and-testmain.md](references/dockertest-and-testmain.md) §1（`Start`）・§2（`main_test.go`）と [rdbtest.md](references/rdbtest.md) §3・§4 を写し、`sqlc generate` で `Read*` を生成する。完了条件: `go vet ./...` が通り、`rdbtest` に `Start` と資料の全テーブル分の `Seed{Table}` / `Read{Table}` がある
+2. **`rdbtest` と `main_test.go` を用意する。** 無ければ、実 DB の基盤を apply-go-test-convention の実 DB の規則で置き、[rdbtest.md](references/rdbtest.md) §3・§4 を写し、`sqlc generate` で `Read*` を生成する。完了条件: `go vet ./...` が通り、`rdbtest` に `Start` と資料の全テーブル分の `Seed{Table}` / `Read{Table}` がある
 3. **BDD を割り振る。** 資料の BDD を [what-to-test.md](references/what-to-test.md) §5 の規則でメソッドのテスト関数へ割り振り、集約が拒むものは末尾コメントの候補にする。完了条件: 資料の全 ID が「どの関数に置く」か「書かない理由」のどちらかを持つ
 4. **表を書く。** 資料の順に `id`（資料の ID）/ `name`（見出し文）/ `description`（gherkin ブロックの転記）、`seed{Table}` × 全テーブル（Before）、When の引数、`wantErr`、`want{Table}` × 全テーブル（After）。資料に無いケース（楽観ロック競合・復元・NotFound）を生成した id でその後ろに足す。完了条件: `description` の各行からフィールドの値が説明でき、全ケースが資料の全テーブル分の `want{Table}`（0 行は書かない）を持つ
 5. **ループ本体を書く。** `Reset` → 全 `Seed` → `rdbtest.Run` の中で復元 → 絞り込み → 実物の操作 → 保存 → error の検証 → 全 `Read` → 全 `assert.Equal`。When が 2 件以上のケースがあれば [table-shape.md](references/table-shape.md) §4 の並走の形にする。完了条件: 全テーブルの `Read` と `assert.Equal` が error の分岐の外に 1 回ずつあり、`t.Parallel()` が無い
-6. **末尾コメントを書く。** 資料にあるが書かない BDD を `// テストしない BDD:` に続けて ID と理由で列挙する。完了条件: 資料の全 ID が `id:` か末尾コメントのどちらか一方に現れる
-7. **機械検査を通す。** テストの形の共通規則の機械検査を通した上で、次を実行する。テストが先の場面では、`go vet` と `go test` は対象未実装のコンパイルエラーで失敗する。これは赤であり停止ではない。失敗理由が対象未実装であることを確かめ、`check-bdd-coverage.py` とテストの形の検査だけを通し、`go test` の緑は実装後に確かめる。`scripts/check-bdd-coverage.py` はこの `SKILL.md` があるディレクトリ直下の tool で、引数はデータモデル資料とテストのあるディレクトリ。資料の BDD ID が `id:` か末尾コメントのどちらにも無い、または資料に無い ID を使っていれば、その箇所を 1 行ずつ stdout に出して終了コード 1。資料や `*_test.go` が無ければ stderr に理由を出して終了コード 2。違反が無ければ `違反なし` と終了コード 0。違反が出たらテストか末尾コメントを直してから再実行する
+6. **資料を宣言する。** 資料の ID を写したテストファイルに、`// BDD の資料: <repository 相対の path>` を一つだけ書く。資料の BDD を `id` に写すのは、永続化層のテストが主に担う BDD だけにする。集約が拒む BDD はドメインのテストが主に担うので、ここでは写さない。主に担うかの判断は apply-go-test-convention に従う
+7. **機械検査を通す。** テストの形の検査と、apply-go-test-convention の `check-bdd-coverage.py` による repository 全体の BDD の網羅の検査を通す。テストが先の場面では、`go vet` と `go test` は対象未実装のコンパイルエラーで失敗する。これは赤であり停止ではない。失敗理由が対象未実装であることを確かめ、形と網羅の検査だけを通し、`go test` の緑は実装後に確かめる
    ```bash
    go vet ./...
    go test -count=1 ./rdb/ ./query/
    go test -count=1 -run 'TestReservationRepository_ApplyHeld/BDD-005_' ./rdb/   # 足したケースを 1 つずつ単独で
-   python3 scripts/check-bdd-coverage.py <データモデル資料.md> <テストのあるディレクトリ>
    ```
 8. **報告する。** 「報告」の項目を返す
 
@@ -75,7 +74,7 @@ description: 永続化層（集約のリポジトリと query service）のテ�
 | `go vet` / コンパイル | 形の違反は見つからなかった |
 | `go test -count=1 ./rdb/ ./query/` | 実 PostgreSQL の上で全ケースが通った |
 | `go test -run 'TestX/BDD-001_'` が通る | そのケースは単独で通る（`Reset` が前提を作っている） |
-| `check-bdd-coverage.py` | 次の 4 つの述語が成り立った。1. 資料に `### [BDD-NNN] 見出し` の形の見出しが 1 つ以上ある 2. 資料の各 BDD ID が、ディレクトリの `*_test.go` の `id:` の値か、`// テストしない BDD:` に続く `// BDD-NNN 理由` のどちらか一方に現れる（両方には現れない） 3. `id:` の値のうち `BDD-` で始まるものは、資料の見出しにある 4. `// テストしない BDD:` の列挙は 1 ファイルに 1 つで、ファイルの最後にあり、各行は `// BDD-NNN 理由` の形で理由が空でない。書かない理由が正しいとは言えない |
+| `check-bdd-coverage.py`（apply-go-test-convention） | 資料の各 BDD が、repository 全体でちょうど一回、主に担うテストの `id:` か「どのテストも担わない BDD」の列挙に現れる。どのテストが主に担うべきかが正しいとは言えない |
 
 「全テーブルを突き合わせている」「Before/After が資料と一致している」「集約が拒むシナリオを書いていない」は、この検査では言えない。下のチェックリストを人が読む。
 
@@ -83,7 +82,7 @@ description: 永続化層（集約のリポジトリと query service）のテ�
 
 - [ ] 全ケースが資料に登場する全テーブル（実装が置く資料に無いテーブルを含む）の `Read{Table}` と `assert.Equal` を持ち、1 テーブルも省いていない。拒まれるケースの `want{Table}` は `seed{Table}` と同じ行で、空にしていない
 - [ ] 保存する集約（イベント）は `FindByID` で復元した実物の操作（生成なら `Hold`）から得ていて、`Restore*` やイベントの組み立てで作っていない
-- [ ] 集約が拒むシナリオ（期限・本人・資格・状態違い）を書いていない。書かなかった資料の BDD が末尾コメントに理由付きで列挙されている
+- [ ] 集約が拒むシナリオ（期限・本人・資格・状態違い）を書いていない。それらはドメインのテストが主に担う
 - [ ] DB 制約で拒まれるケースの `wantErr` がドメインの sentinel（`reservation.ErrOverlappingSlot`）、競合が `rdb.ErrConflict`、無い集約が `rdb.ErrNotFound` になっている
 - [ ] 同時実行のケースは When が 2 件で、先頭が先に成立し、最後が `wantErr` を受ける。goroutine の中で `require` を呼んでいない
 - [ ] `seed{Table}` / `want{Table}` の値が資料の Before/After の表と一致し、時刻は UTC、identity の `id` は `Reset` 後の採番と一致している
@@ -94,7 +93,7 @@ description: 永続化層（集約のリポジトリと query service）のテ�
 ## 報告
 
 - 対象（リポジトリ / query service）とテスト関数名、資料の全テーブルの一覧
-- ケース数と内訳: 資料にあるケース（ID と置いた関数）/ 資料に無いケース（生成した id と観点: 競合・復元・NotFound・フィルタ等）/ テストしない BDD（ID と理由）
+- ケース数と内訳: 資料にあるケース（ID と置いた関数）/ 資料に無いケース（生成した id と観点: 競合・復元・NotFound・フィルタ等）/ どのテストも担わない BDD（ID と理由）
 - 同時実行のケースと、先頭が先に成立する根拠（排他制約・行ロック）
-- 機械検査の結果（`go vet` / `go test` / 単独実行 / `check-bdd-coverage.py`）と、実 DB の起動にかかった時間
+- 機械検査の結果（`go vet` / `go test` / 単独実行 / BDD の網羅の検査）と、実 DB の起動にかかった時間
 - 資料・DDL・実装と食い違った点（列の有無、制約名、識別子の写し方）と、停止条件で返した論点

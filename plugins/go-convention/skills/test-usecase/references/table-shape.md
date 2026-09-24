@@ -32,10 +32,10 @@
 
 | フィールド | usecase での規則 |
 |---|---|
-| `id` | 生成した id。usecase の観点は資料の BDD ではないので、`BDD-NNN` を付けない。同じディレクトリの `*_test.go` 全体で一意・不変 |
+| `id` | usecase のテストが主に担う BDD（複数の書き込みが同じ確定で起きる、手順の順序）なら資料の ID、それ以外は生成した id。主に担うかは apply-go-test-convention の規則で決める |
 | `name` | 業務語の 1 文で、読めばどの観点かが分かる（「他の顧客の無断不利用は数えず仮押さえが成立する」→ 協調）。技術語（`nil` / `rollback` / 関数名）を入れない |
 | `description` | raw string。`Given:` / `When:` / `Then:` を行頭にこの順で各 1 回。`And:` は空白 2 つで字下げ。拒むケースは `NOTE: Rule:` と `Reason:` を書き、`Reason:` に usecase の配線として何が起きたかを書く |
-| 末尾コメント | 「テストしない BDD」の列挙は書かない。usecase のテストは資料の BDD を対象にしない |
+| 資料の宣言 | 資料の ID を写したら、テストファイルに `// BDD の資料: <repository 相対の path>` を一つだけ書く |
 
 `description` の各行はフィールドに写る。`Given:` → `seed{Table}` / `ids`、`When:` → `in`（時刻を含む）、`Then:` → `wantErr` / `want` / `want{Table}`。写せない行があれば、それは usecase の観点ではなく別の層の検証である。
 

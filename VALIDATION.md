@@ -73,3 +73,19 @@ bash scripts/validate.sh
 ## 言えること
 
 これらが通ったとき言えるのは、判定した述語が成り立ったことだけです。規約の文章が曖昧さなく読めるか、例が規約の意図を写しているかは目視で確認します。
+
+## check-bdd-coverage.py（repository 全体の BDD の追跡）
+
+`plugins/go-convention/skills/apply-go-test-convention/scripts/check-bdd-coverage.py` は、資料の一つの BDD を repository 全体でちょうど一つのテストが名乗る、という規則の構造を検査します。
+
+```text
+基準資料: 引数で渡した資料（業務知識・データモデル）の `### [BDD-…] 見出し` と、apply-go-test-convention の references/case-identity.md の宣言と列挙の形
+入力: repository root 配下の全 *_test.go（.git と vendor を除く）と、引数の資料
+正規化: 資料の path は repository root からの相対 path にそろえる。`id:` 行は直後が `name:` のときだけケースと見なす
+合格述語: 各資料に見出しが1つ以上あり資料内で ID が重複しない。BDD の id か列挙を持つファイルは `// BDD の資料:` をちょうど1つ持ち、それが引数の資料である。その id と列挙の ID は宣言した資料にある。各資料の各 ID は、その資料を宣言したファイル全体で、id: か列挙のどちらかにちょうど1回現れる。列挙は1ファイルに1つで、最後にあり、各行に理由がある
+失敗時の診断: 資料と ID、現れた場所（ファイル:行）、宣言の数、列挙の形の違反
+正例: tests/bdd-coverage（接頭辞付きの ID `BDD-OUT-001` を含む）
+反例: 別の package の同じ BDD、どこにも現れない BDD、資料の宣言の無いファイル、資料に無い ID、id と列挙の両方、理由の無い列挙、最後に無い列挙
+境界例: どのテストも担わない BDD を列挙で持つ（受理）
+意味評価として残す範囲: どのテストがその BDD を主に担うべきか、列挙の理由が正しいか、description が資料の gherkin と一致するか
+```
