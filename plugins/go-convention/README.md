@@ -4,7 +4,7 @@
 
 ## これは何か／何ではないか
 
-これは、Go でドメイン駆動設計の層（ドメインモデル・永続化・usecase・handler）と横断的関心事（エラー・ログ）とテストを、同じ前提（typestate の集約、完全コンストラクタの値オブジェクト、sqlc + pgx、Connect-RPC、古典派のテスト、BDD 資料の ID をそのまま使うテスト）で書くための規約です。
+これは、Go でドメイン駆動設計の層（ドメインモデル・永続化・usecase・handler）と横断的関心事（エラー・ログ）とテストを、同じ前提で書くための規約です。前提は、状態ごとに型を分けた集約、生成の時点で検証する値オブジェクト、sqlc と pgx、Connect-RPC、実物を通す古典派のテスト、BDD 資料の ID をそのまま使うテストです。
 
 これは、層とは何か・開発プロセス（内側から外へ、BDD 通過ゲート、ATDD）を決めるものではありません。確定済みの論理責務と集約境界を受け取り、Go 固有の package 配置へ写すところからを扱います。
 
@@ -14,10 +14,10 @@
 |---|---|
 | `write-go-code` | Go 1.27 の言語レベルの規約（プリミティブを使わない、丸めない、関数の形、interface、命名、コメント、ツール）で書く・直す |
 | `apply-go-package-layout` | 確定済みの論理責務を Go の package 配置と import 方向へ写す |
-| `implement-domain-model` | domain-model 資料から値オブジェクト・エンティティ・集約を実装する |
-| `implement-repository` | 集約の永続化ポートを sqlc + pgx で実装する（通常型・イベント型） |
+| `implement-domain-model` | ドメインモデルの資料から、値オブジェクト、集約、イベント、永続化ポートを実装する |
+| `implement-repository` | 集約の永続化ポートと単純なパターンの口（DB へのアクセスを受け持つ関数の集まり）を sqlc と pgx で実装する |
 | `implement-query-service` | CQRS の読み取り側を sqlc で実装する |
-| `implement-usecase` | command / query の usecase を実装する |
+| `implement-usecase` | command、単純なパターンの手順、query の usecase を実装する |
 | `implement-handler` | Connect-RPC の handler と interceptor を実装する |
 | `handle-errors` | エラーを15の分類から定義し、運び、翻訳し、応答の表と処理の表で扱う |
 | `write-logs` | ログレベルの意味と分類からの表、境界で 1 回だけ記録する場所、logger の注入、属性と秘匿 |
