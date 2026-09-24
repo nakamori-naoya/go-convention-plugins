@@ -2,10 +2,11 @@
 """repository 全体の *_test.go と、BDD を持つ資料を突き合わせる。
 
 判定する述語（通ったとき言えるのはこれだけ）:
-  1. 引数の各資料に `### [BDD-…] 見出し` の形の見出しが 1 つ以上あり、同じ資料の中で ID が重複しない
+  1. 引数の各資料に `### [BDD-<3桁以上の連番>] 見出し` の形の見出しが 1 つ以上あり、同じ資料の中で ID が重複しない
+     （文法の持ち主は bdd-discovery-and-formulation の write-bdd。資料の種類の接頭辞を足した ID は受け入れない）
   2. `id:` の値が `BDD-` で始まるケース、または `// どのテストも担わない BDD:` の列挙を持つ *_test.go は、
      `// BDD の資料: <repository 相対の path>` の宣言をちょうど 1 つ持ち、その path は引数の資料のどれかである
-  3. 宣言したファイルの `BDD-` の id と列挙の ID は、宣言した資料の見出しにある
+  3. 宣言したファイルの `BDD-` の id と列挙の ID は、`BDD-<3桁以上の連番>` の形で、宣言した資料の見出しにある
   4. 各資料の各 BDD ID は、その資料を宣言したファイル全体を通して、`id:` の値か列挙のどちらか一方に、ちょうど 1 回現れる
   5. 列挙は 1 ファイルに 1 つで、ファイルの最後にあり、各行は `// <ID> <理由>` の形で理由が空でない
 
@@ -25,7 +26,8 @@ import re
 import sys
 from pathlib import Path
 
-HEADING_RE = re.compile(r"^###\s+\[(BDD-[^\]\s]+)\]\s+\S", re.M)
+HEADING_RE = re.compile(r"^###\s+\[(BDD-\d{3,})\]\s+\S", re.M)
+ID_VALUE_RE = re.compile(r"^BDD-\d{3,}$")
 ID_RE = re.compile(r'^\s*id:\s*"((?:[^"\\]|\\.)*)"\s*,\s*$')
 NAME_RE = re.compile(r"^\s*name:\s*\"")
 DECL_RE = re.compile(r"^//\s*BDD の資料:\s*(\S.*?)\s*$")
@@ -102,7 +104,7 @@ def main(argv: list[str]) -> int:
         key = rel(root, doc)
         ids = HEADING_RE.findall(doc.read_text(encoding="utf-8"))
         if not ids:
-            print(f"{key}: `### [BDD-…] 見出し` の形の見出しが無い", file=sys.stderr)
+            print(f"{key}: `### [BDD-<3桁以上の連番>] 見出し` の形の見出しが無い", file=sys.stderr)
             return 2
         seen: set[str] = set()
         for bdd_id in ids:
@@ -137,12 +139,18 @@ def main(argv: list[str]) -> int:
         doc_ids = set(docs[declared])
         for n, bdd_id in bdd_cases:
             where = f"{name}:{n}（id:）"
+            if not ID_VALUE_RE.match(bdd_id):
+                problems.append(f"{where}: {bdd_id} は BDD-<3桁以上の連番> の形でない")
+                continue
             if bdd_id not in doc_ids:
                 problems.append(f"{where}: {bdd_id} は資料 {declared} の見出しに無い")
                 continue
             occurrences.setdefault((declared, bdd_id), []).append(where)
         for n, bdd_id in listed:
             where = f"{name}:{n}（列挙）"
+            if not ID_VALUE_RE.match(bdd_id):
+                problems.append(f"{where}: {bdd_id} は BDD-<3桁以上の連番> の形でない")
+                continue
             if bdd_id not in doc_ids:
                 problems.append(f"{where}: {bdd_id} は資料 {declared} の見出しに無い")
                 continue
