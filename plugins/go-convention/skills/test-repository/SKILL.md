@@ -1,99 +1,66 @@
 ---
 name: test-repository
-description: 永続化層（集約のリポジトリと query service）のテストを、dockertest で起動した実 PostgreSQL の上で書く・直す。リポジトリはデータモデル資料の BDD を「Before を投入 → 復元 → 実物の集約の操作 → 保存 → 資料の全テーブルを全行で突き合わせ」で写し、DB 制約違反の翻訳・楽観ロック競合・同時実行・NotFound を確かめる。query service は「Before を投入 → 読み取り → DTO を突き合わせ」で書く。「リポジトリのテストを書いて」「Apply{Event} のテストを足して」「query service のテストを書いて」「データモデル資料の BDD をテストにして」と言われたときに使う。集約・値オブジェクトの規則のテスト、usecase の tx 境界と協調のテスト、handler のテスト、リポジトリの実装そのものは対象外として、それぞれの規約へ返す。
+description: 永続化層（集約のリポジトリ、Query の実装、単純なパターンのリポジトリ相当の口）のテストを、dockertest で起動した実物の PostgreSQL の上で書く・直す。永続化層が主に担う BDD（記録される行、DB の制約が守る拒否、同時に起きたときの結果、読み取りモデル）を、実物の集約のコマンドと実物のリポジトリで起こし、資料が After に挙げたテーブルは全行と全列で、挙げていないテーブルは行数が変わらないことで確かめる。Before は持ち主の書き込み経路で作り、同時に起きたときはバリアで順序を固定する。「リポジトリのテストを書いて」「データモデルの BDD をテストにして」「Query のテストを書いて」と言われたときに使う。テストの形、実 DB の基盤、テストデータ、差し替えは apply-go-test-convention、集約の判断は test-domain-model、手順は test-usecase へ返す。
 ---
 
 # test-repository
 
-[工程順序の定義](playbook.yml)を最初に読み、同じagentが\`steps\`を宣言順に実行する。YAMLは工程順序を決め、各工程の判断内容と根拠はこの本文と参照資料を実読して評価する。失敗時は成功扱いせず停止して、完了工程、根拠、未決を残し、再開時は最初の未完了工程から続ける。
+[工程順序の定義](playbook.yml)を最初に読み、同じ agent が `steps` を宣言順に実行する。YAML は工程の順序だけを決め、各工程の判断はこの本文と参照資料を読んで行う。失敗した工程は成功扱いせずに止まり、完了した工程、根拠、未決を残す。再開するときは、最初の未完了の工程から続ける。
 
-これは、**永続化層のテストを、実 DB の上で「資料の Before から After へ行がどう変わるか」を全テーブルの全行で確かめる形に揃える規約**である。リポジトリのテストは復元 → 実物の集約の操作 → 保存で駆動し、query service のテストは Before を投入 → 読み取り → DTO の突き合わせで駆動する。
+## 目的
 
-これは、**業務ルールのテストではない**（集約と値オブジェクトが拒む条件はドメインのテストが実 DB 無しで確かめる。集約が拒むシナリオはここに書かず、末尾コメントに理由を残す）。**usecase のテストでもない**（tx 境界・複数集約の協調・入力の解決は usecase のテストの関心）。**テストの形の共通規則でもない**（表の形・`id` / `name` / `description`・`want*` と `wantErr` は共通規則をそのまま使い、ここではこの層で決まる分だけを足す）。**リポジトリの実装規約でもない**（marshaller・sqlc・tx の乗り方は実装の規約が決め、ここでは公開メソッドを通して観測する）。
+永続化層が、資料どおりに行を書き、DB の制約で拒み、同時に起きたときに一方だけを成立させ、読み取りモデルを返すかを、実物の PostgreSQL の上で確かめる。読み終えると、どの BDD をどう起こし、何を突き合わせるかを決められる。
 
-前提: Go 1.27・PostgreSQL・`github.com/jackc/pgx/v5`・`github.com/sqlc-dev/sqlc`（`sql_package: "pgx/v5"`）・`github.com/ory/dockertest/v4`・`github.com/stretchr/testify`・Docker daemon。入力はデータモデル資料（テーブル定義・「シナリオと記録の対応」・BDD の Before/After の表）、ドメインの実装（集約・`Restore*`・`As*`・sentinel・`Repository` interface）、リポジトリと query service の実装（まだ無ければ、ドメインの `Repository` interface と usecase 側の読み取り契約）。
+中心にあるのは二つの考えである。一つは、**資料の After と食い違わず、資料の書き方には縛られすぎない**ことである。資料が挙げたテーブルは厳密に、挙げていないテーブルは行数で見張る。もう一つは、**本番の書き込み経路を通す**ことである。Before も When も、実物の集約とリポジトリを通して作る。
 
-テストを書く場面は 2 つあり、どちらも通常である。**実装が先にある**場面では、リポジトリ（または query service）の公開メソッドを読んでテストを書く。**テストが先**（実装がまだ無い）場面では、ドメインの `Repository` interface（query service なら usecase 側の読み取りポート）のメソッドと、リポジトリの実装の規約の命名（`NewReservationRepository(q)` の形）からテストを書き、コンパイルエラーまたは未定義シンボルで赤になる状態を正とする。テストは実装ではなく資料と interface から写すので、どちらの場面でも書く内容は同じである。例の題材は貸会議室予約 RoomFlow（module `example.com/roomflow`）で、ディレクトリ構成は上位の開発規約が決めるため、例は import path を短くするために平らにしている。
+テストの形、実 DB の基盤、テストデータ、差し替えてよい境界、BDD の写し方は、apply-go-test-convention に従う。
 
 ## 入力
 
-- データモデル資料（テーブル定義・「シナリオと記録の対応」・BDDのBefore/After）の絶対path、ドメインの実装、対象のリポジトリまたはquery serviceの実装。
-- `references`: 追加で従う資料の絶対path配列。任意。手順の最初に読み、以降の判断でこの規約と併せて従う。
+データモデルの資料と物理設計の資料の絶対 path、対象のリポジトリ（または Query の実装、口）を受け取る。業務知識の資料も、DB の制約が守る BDD を拾うために受け取る。
 
-プロジェクト固有の規約（置き場、命名、追加で従う資料）は、対象repositoryのAGENTS.md / CLAUDE.mdと`references`で渡される。この入口は既定値を持たず、指示文へ展開もしない。
+`references` は任意で、追加で従う資料の絶対 path の配列である。手順の最初に読み、この規約と併せて従う。
 
-## 規約
+テストを書く場面は二つあり、どちらも通常である。テストが先の場面では、interface と資料から名前とシグネチャを決めて書き、コンパイルエラーで赤になる状態を正とする。
 
-| # | 柱 | 一言で | 基準資料 |
-|---|---|---|---|
-| 1 | 何をテストするか | 資料の BDD ごとの状態変化を全テーブル全行で（絶対規則）。復元と保存の往復、DB 制約違反の翻訳、楽観ロック競合、同時実行、NotFound。集約が拒むシナリオ・業務ルール・SQL の文言・marshaller 単体・ログは書かない | [what-to-test.md](references/what-to-test.md) |
-| 2 | 実 DB | dockertest で起動した実 PostgreSQL を使う。起動の基盤、試行ごとの期限付きの起動待ち、`main_test.go`、直列は apply-go-test-convention の実 DB の規則に従う | apply-go-test-convention |
-| 3 | rdbtest | `rdb/rdbtest` に `Start` / `Reset` / `Run` / テーブルごとの `Seed{Table}` / `Read{Table}`。行型は sqlc の生成型、query は `rdb/query/rdbtest.sql`。テスト本文に SQL を書かない | [rdbtest.md](references/rdbtest.md) |
-| 4 | テーブルの形 | `seed{Table}` × 全テーブル、When の引数、`wantErr`、`want{Table}` × 全テーブル。書かないテーブルは空と一致。同時実行は When をスライスにして 2 本並走 | [table-shape.md](references/table-shape.md) |
-| 5 | query service | Before を投入 → 読み取り → DTO を `assert.Equal`。フィルタ・ページング・NULL・空の 4 観点。全テーブルの突き合わせは要らない | [query-service-test.md](references/query-service-test.md) |
+## 判断基準
 
-完全な例は [table-shape.md](references/table-shape.md) §5 と [query-service-test.md](references/query-service-test.md) §3。**書き始める前に一度読み、この形を写す。**
+### 何を主に担い、どう起こすか
+
+記録される行、DB の制約が守る拒否、同時に起きたとき、読み取りモデルを観測する BDD を主に担う。集約が拒むものは、ドメインのテストが主に担う。When は、Find で得た実物の集約のコマンドと、実物の `Apply` で起こす。詳しくは [何をテストするか](references/what-to-test.md) を読む。
+
+### 何を突き合わせるか
+
+資料が After に挙げたテーブルは、全行と全列で突き合わせる。挙げていないテーブルは、DB のカタログから取って、行数が変わらないことを確かめる。Before は持ち主の書き込み経路で作る。行を読むテスト専用の SQL は、本番と別の生成の package に置く。詳しくは [突き合わせる範囲](references/comparing.md) を読む。
+
+### 同時に起きたとき
+
+二つの操作の順序をバリアで固定し、タイミングに頼らない。順に再現できる衝突は、並走させない。詳しくは [同時に起きたとき](references/concurrency.md) を読む。
 
 ## 手順
 
-1. **資料と対象を揃える。** `references` があれば先に読む。データモデル資料の「シナリオと記録の対応」と BDD の Before/After、リポジトリ（または query service）の公開メソッド（テストが先なら `Repository` interface または読み取りポートのメソッドと、実装の規約から決めたコンストラクタ名）を並べる。完了条件: 資料の全テーブルが列挙され、テーブルごとに `sqlcgen` の行型が 1 つ対応している
-2. **`rdbtest` と `main_test.go` を用意する。** 無ければ、実 DB の基盤を apply-go-test-convention の実 DB の規則で置き、[rdbtest.md](references/rdbtest.md) §3・§4 を写し、`sqlc generate` で `Read*` を生成する。完了条件: `go vet ./...` が通り、`rdbtest` に `Start` と資料の全テーブル分の `Seed{Table}` / `Read{Table}` がある
-3. **BDD を割り振る。** 資料の BDD を [what-to-test.md](references/what-to-test.md) §5 の規則でメソッドのテスト関数へ割り振り、集約が拒むものは末尾コメントの候補にする。完了条件: 資料の全 ID が「どの関数に置く」か「書かない理由」のどちらかを持つ
-4. **表を書く。** 資料の順に `id`（資料の ID）/ `name`（見出し文）/ `description`（gherkin ブロックの転記）、`seed{Table}` × 全テーブル（Before）、When の引数、`wantErr`、`want{Table}` × 全テーブル（After）。資料に無いケース（楽観ロック競合・復元・NotFound）を生成した id でその後ろに足す。完了条件: `description` の各行からフィールドの値が説明でき、全ケースが資料の全テーブル分の `want{Table}`（0 行は書かない）を持つ
-5. **ループ本体を書く。** `Reset` → 全 `Seed` → `rdbtest.Run` の中で復元 → 絞り込み → 実物の操作 → 保存 → error の検証 → 全 `Read` → 全 `assert.Equal`。When が 2 件以上のケースがあれば [table-shape.md](references/table-shape.md) §4 の並走の形にする。完了条件: 全テーブルの `Read` と `assert.Equal` が error の分岐の外に 1 回ずつあり、`t.Parallel()` が無い
-6. **資料を宣言する。** 資料の ID を写したテストファイルに、`// BDD の資料: <repository 相対の path>` を一つだけ書く。資料の BDD を `id` に写すのは、永続化層のテストが主に担う BDD だけにする。集約が拒む BDD はドメインのテストが主に担うので、ここでは写さない。主に担うかの判断は apply-go-test-convention に従う
-7. **機械検査を通す。** テストの形の検査と、apply-go-test-convention の `check-bdd-coverage.py` による repository 全体の BDD の網羅の検査を通す。テストが先の場面では、`go vet` と `go test` は対象未実装のコンパイルエラーで失敗する。これは赤であり停止ではない。失敗理由が対象未実装であることを確かめ、形と網羅の検査だけを通し、`go test` の緑は実装後に確かめる
+1. **資料と対象を揃える。** `references` があれば先に読む。データモデルの資料の BDD と Before と After、物理設計の制約と分離レベル、対象のメソッドを並べる。
+2. **BDD を割り振る。** 各 BDD を、永続化層が主に担うか、ほかのレベルが主に担うかに分け、主に担うものをメソッドのテスト関数に割り振る。
+3. **実 DB とテスト専用の SQL を用意する。** 実 DB の基盤が無ければ、apply-go-test-convention の実 DB の規則で置く。行を読むテスト専用の SQL を、別の生成の package に用意する。
+4. **表を書く。** 資料の順に BDD を写し、Before を作る手順、When、`wantErr`、資料が挙げたテーブルの After を並べる。資料に無いケース（状態ごとの Find、行が無い、保存値の破損、トランザクションが無い）を生成した id で足す。資料の ID を写したファイルに、資料の宣言を一つ書く。
+5. **ループ本体を書く。** Before を作る → 挙げていないテーブルの行数を記録する → When → エラーを確かめる → 挙げたテーブルを全行読んで突き合わせる → 挙げていないテーブルの行数が変わらないことを確かめる、を一回書く。同時に起きたときのケースは、バリアの形で書く。
+6. **機械検査を通す。** テストが先の場面では、`go vet` と `go test` は未実装のコンパイルエラーで失敗する。これは赤であり停止ではない。
    ```bash
    go vet ./...
-   go test -count=1 ./rdb/ ./query/
-   go test -count=1 -run 'TestReservationRepository_ApplyHeld/BDD-005_' ./rdb/   # 足したケースを 1 つずつ単独で
+   go test -count=1 ./<repository package>/... ./<query package>/...
+   go test -count=1 -run 'TestLoanRepository_ApplyLent/BDD-001_' ./<repository package>/...
    ```
-8. **報告する。** 「報告」の項目を返す
+   テストの形の検査と、repository 全体の BDD の網羅の検査は、apply-go-test-convention の tool で行う。
+7. **報告する。** 出力の項目を返す。
 
 ## 停止条件
 
-止まるのは、資料または規約の契約に反する要求、正式な定義に無い決定が要る、利用者の許可が要る、toolが失敗した、のどれかに当たるときで、それ以外の判断の揺れでは止まらない。欠けているのが業務事実（操作・状態・拒む理由・資料が未決と明示した値）なら止まり、命名・分割・定義場所・並び・テストの置き場のような設計判断の揺れなら仮説を明示して進む。
+データモデルの資料の BDD に Before と After の表が無いときは、突き合わせる期待が決まらないので、資料へ返す。資料の制約が物理設計に無く、拒否を DB で再現できないときは、書かずに物理設計の資料へ返す。Before を持ち主の書き込み経路で作れず、例外にも当たらないときは、書き込み経路の不足を返す。リポジトリが ctx のトランザクションを見ずに pool で動く、Query の実装が書き込むときは、実装の規約違反として implement-repository か implement-query-service へ返す。
 
-- データモデル資料が無い、または BDD に Before/After の表が無い → 表の `seed` / `want` を作れない。資料の作成へ返す
-- 資料に登場するテーブルに `sqlcgen` の行型が無い（DDL に無い・sqlc の `schema` に入っていない） → 全テーブルの突き合わせができない。DDL とリポジトリの実装へ返す
-- 資料の不変条件（重なり禁止・一意）が DDL の名前付き制約に無く、拒否を DB で再現できない → 書かない。データモデル資料とリポジトリの実装へ返す
-- 資料の BDD の When が集約の操作に写せない（複数集約にまたがる・別の行為者の操作が混ざる） → 書かない。usecase のテストへ返し、末尾コメントに理由を書く
-- リポジトリが `*pgxpool.Pool` を持ち `rdbtest.Run` の外で動く、または query service が書き込む → テストではなく実装の規約違反。実装の規約へ返す。実装がまだ無いこと自体は止まる理由ではない（テストが先の場面）
-- Docker daemon に接続できない → 起動失敗として落とす。`t.Skip` で通さない
+止まるときは、書いた範囲と書かなかった範囲を分け、返す先と必要な決定を報告に示す。
 
-止まるときは、書いた範囲と書かなかった範囲を分け、返す先（資料、実装の規約、利用者）と必要な決定を報告に示す。
+## 出力
 
-判断の揺れでは、その時点の根拠から最も筋の良い形を仮説として採り、仮説であることと採らなかった形を報告に明示して進む。
+テスト関数と、主に担う BDD の ID、ほかのレベルが主に担う BDD とその担い手、資料に無いケースで埋めた観点、同時に起きたときのケースとバリアの置き方、機械検査の結果、返した論点を報告する。
 
-- `seed` / `want`の行の並びや識別子の写し方が資料から一意に決まらない: 資料のBefore/After表の順に最も近い形を採り、報告に示す。
-
-## 機械検査で言えること
-
-| 検査 | 通ったら言えること |
-|---|---|
-| `go vet` / コンパイル | 形の違反は見つからなかった |
-| `go test -count=1 ./rdb/ ./query/` | 実 PostgreSQL の上で全ケースが通った |
-| `go test -run 'TestX/BDD-001_'` が通る | そのケースは単独で通る（`Reset` が前提を作っている） |
-| `check-bdd-coverage.py`（apply-go-test-convention） | 資料の各 BDD が、repository 全体でちょうど一回、主に担うテストの `id:` か「どのテストも担わない BDD」の列挙に現れる。どのテストが主に担うべきかが正しいとは言えない |
-
-「全テーブルを突き合わせている」「Before/After が資料と一致している」「集約が拒むシナリオを書いていない」は、この検査では言えない。下のチェックリストを人が読む。
-
-## チェックリスト（機械で言えないことだけ）
-
-- [ ] 全ケースが資料に登場する全テーブル（実装が置く資料に無いテーブルを含む）の `Read{Table}` と `assert.Equal` を持ち、1 テーブルも省いていない。拒まれるケースの `want{Table}` は `seed{Table}` と同じ行で、空にしていない
-- [ ] 保存する集約（イベント）は `FindByID` で復元した実物の操作（生成なら `Hold`）から得ていて、`Restore*` やイベントの組み立てで作っていない
-- [ ] 集約が拒むシナリオ（期限・本人・資格・状態違い）を書いていない。それらはドメインのテストが主に担う
-- [ ] DB 制約で拒まれるケースの `wantErr` がドメインの sentinel（`reservation.ErrOverlappingSlot`）、競合が `rdb.ErrConflict`、無い集約が `rdb.ErrNotFound` になっている
-- [ ] 同時実行のケースは When が 2 件で、先頭が先に成立し、最後が `wantErr` を受ける。goroutine の中で `require` を呼んでいない
-- [ ] `seed{Table}` / `want{Table}` の値が資料の Before/After の表と一致し、時刻は UTC、identity の `id` は `Reset` 後の採番と一致している
-- [ ] `TestMain` は `main_test.go` に 1 つだけで、`rdbtest.Start` → `m.Run()` → `Close` → `os.Exit` だけを書き、`t.Skip` が無い。`main_test.go` にあるのは `pool`（または `*rdbtest.DB`）・`TestMain`・起動を支える関数だけ。`t.Parallel()` が無く、ループ直前のコメントで共有 DB を名指ししている
-- [ ] テスト本文と `rdbtest` に SQL 文が無い（`rdb/query/rdbtest.sql` だけ）。`setup` フィールドが無い
-- [ ] query service のテストがフィルタ・ページング・NULL・空のうち対象にある観点を全部持ち、集約を復元していない
-
-## 報告
-
-- 対象（リポジトリ / query service）とテスト関数名、資料の全テーブルの一覧
-- ケース数と内訳: 資料にあるケース（ID と置いた関数）/ 資料に無いケース（生成した id と観点: 競合・復元・NotFound・フィルタ等）/ どのテストも担わない BDD（ID と理由）
-- 同時実行のケースと、先頭が先に成立する根拠（排他制約・行ロック）
-- 機械検査の結果（`go vet` / `go test` / 単独実行 / BDD の網羅の検査）と、実 DB の起動にかかった時間
-- 資料・DDL・実装と食い違った点（列の有無、制約名、識別子の写し方）と、停止条件で返した論点
+機械検査が通って言えるのは、実物の PostgreSQL の上で全ケースが通ったことと、テストの形と BDD の網羅の構造だけである。期待の行が資料の After と一致するかは、対象を読んで報告する。

@@ -1,82 +1,70 @@
 ---
 name: implement-repository
-description: ドメイン層に定義済みの集約の永続化ポート（Repository interface）を、PostgreSQL ＋ pgx/v5 ＋ sqlc で実装する。通常型（FindByID / Create / Update で状態を上書き）とイベント型（FindByID ＋ Apply{Event} でドメインイベントを追記し current 行へ反映）の 2 つの型、ctx の tx に乗る書き方、ドメインと行を往復させる marshaller、DB 制約違反・NotFound・楽観ロック競合の翻訳を定める。「このリポジトリを実装して」「集約の永続化を書いて」「Apply{Event} を実装して」「データモデル資料からリポジトリを起こして」と言われたときに使う。Repository interface の設計、トランザクションを張る側の書き方、一覧・件数・検索の読み取りモデル、DDL とマイグレーション、何をテストするかは対象外として、それぞれの規約へ返す。
+description: ドメインが定義した集約の永続化ポート（Find と Apply<イベント名>）と、単純なパターンの手順が所有するリポジトリ相当の口を、PostgreSQL、pgx/v5、sqlc で実装する。データモデルと物理設計の資料が決めたテーブルの型（リソース、<対象>_base_events、<対象>_<過去分詞>_events、派生のテーブル、技術的な処理の四つの表）と制約をそのまま写し、ctx のトランザクションを必須にし、Find は集約の外の事実を読んで初期状態の型へ持たせるだけで判断せず、Apply はイベントの版と時点を写し、保存値の破損を回復不能へ付け替える。「このリポジトリを実装して」「Apply を書いて」「延滞の通知の回収の口を書いて」と言われたときに使う。永続化ポートの形は implement-domain-model、トランザクションを張る側は implement-usecase、読み取りの口は implement-query-service、テストは test-repository、テーブルの型と分離レベルは W1 の資料へ返す。
 ---
 
 # implement-repository
 
-[工程順序の定義](playbook.yml)を最初に読み、同じagentが\`steps\`を宣言順に実行する。YAMLは工程順序を決め、各工程の判断内容と根拠はこの本文と参照資料を実読して評価する。失敗時は成功扱いせず停止して、完了工程、根拠、未決を残し、再開時は最初の未完了工程から続ける。
+[工程順序の定義](playbook.yml)を最初に読み、同じ agent が `steps` を宣言順に実行する。YAML は工程の順序だけを決め、各工程の判断はこの本文と参照資料を読んで行う。失敗した工程は成功扱いせずに止まり、完了した工程、根拠、未決を残す。再開するときは、最初の未完了の工程から続ける。
 
-これは、**集約の永続化ポートの RDB 実装を、ドメインの値とテーブルの行の往復と、DB が拒んだ事実の翻訳だけで書く規約**である。
+## 目的
 
-これは、**業務判断の置き場ではない**（何を許し何を拒むかは集約と VO が決める）。**トランザクションの持ち主ではない**（usecase の規約が張り、リポジトリは ctx の tx に乗る）。**読み取りモデルの生成器ではない**（一覧・件数・検索は行を DTO へ写す別物で、query service の規約が決める）。**interface の設計者でもない**（interface はドメインの規約が集約ごとに 1 つ定義済みで、ここでは実装だけを書く）。何をテストするかはテストの規約が決める。
+集約の永続化ポートと、単純なパターンのリポジトリ相当の口の RDB 実装を、ドメインの値とテーブルの行の往復と、DB が拒んだ事実の翻訳だけで書く。読み終えると、資料のテーブルの型をどう読み書きし、何を翻訳するかを決められる。
 
-前提: Go 1.27、PostgreSQL、`github.com/jackc/pgx/v5`（`pgxpool` / `pgtype` / `pgconn`）、`github.com/sqlc-dev/sqlc`（`sql_package: "pgx/v5"`）。入力はドメインの実装（集約・VO・`Repository` interface・sentinel）とデータモデル資料（テーブル定義と「シナリオと記録の対応」）。例の題材は貸会議室予約 RoomFlow（module `example.com/roomflow`）で、ディレクトリ構成は上位の開発規約が決めるため、例は import path を短くするために平らにしている。
+中心にあるのは二つの考えである。一つは、**資料が決めたテーブルの型と制約をそのまま写す**ことである。テーブルの型、名前、列、制約、分離レベルは W1 の資料（データモデルと物理設計）が決める。もう一つは、**リポジトリは判断しない**ことである。Find は読んで値にするだけで、判断はコマンドが行う。トランザクションは usecase が張る。
 
 ## 入力
 
-- ドメインの実装（集約・VO・`Repository` interface・sentinel）と、データモデル資料（rdb-logical-data-modeling）の絶対path。
-- `references`: 追加で従う資料の絶対path配列。任意。手順の最初に読み、以降の判断でこの規約と併せて従う。
+ドメインの実装（集約、値オブジェクト、永続化ポート、具体エラー）、または手順が所有する口の interface と、データモデルの資料と物理設計の資料の絶対 path を受け取る。
 
-プロジェクト固有の規約（置き場、命名、追加で従う資料）は、対象repositoryのAGENTS.md / CLAUDE.mdと`references`で渡される。この入口は既定値を持たず、指示文へ展開もしない。
+`references` は任意で、追加で従う資料の絶対 path の配列である。手順の最初に読み、この規約と併せて従う。
 
-先に赤いテスト（データモデル資料と `Repository` interface から書かれ、実装が無いために失敗している）がある場面も通常である。そのテストが前提にするコンストラクタ名と interface のメソッドに合わせ、テストと `rdbtest` を変えずに緑にする実装を書く。テストが資料に無いテーブル・列・翻訳を要求していれば、実装で補わずテストと資料へ返す。
+前提は Go 1.27、PostgreSQL、`github.com/jackc/pgx/v5`、`github.com/sqlc-dev/sqlc`（`sql_package: "pgx/v5"`）である。
 
-## 規約
+先に赤いテストがある場面も通常である。テストが前提にするコンストラクタと interface のメソッドに合わせ、テストを変えずに緑にする実装を書く。テストが資料に無いテーブル、列、翻訳を要求していれば、実装で補わずに返す。
 
-| # | 柱 | 一言で | 基準資料 |
-|---|---|---|---|
-| 1 | 責務 | 復元と永続化と翻訳だけ。業務判断・tx・ログ・Query 系・時刻と ID の採番をしない | [what-repository-is.md](references/what-repository-is.md) |
-| 2 | 2 つの型 | データモデル資料にイベント系テーブルがあればイベント型（`Apply{Event}`、集約を受け取らない、楽観ロック）、無ければ通常型（`Create` / `Update`、版なし）。`FindByID` は和型を返し、状態指定取得は禁止 | [standard-and-event-sourced.md](references/standard-and-event-sourced.md) |
-| 3 | marshaller | 同じ package の純粋関数。`{元}To{先}` 命名。行 → ドメインは `New*` と `Restore*` 経由。current 行が一次データ。NULL は `(T, bool)`。時刻は UTC | [marshaller.md](references/marshaller.md) |
-| 4 | sqlc と tx | SQL は `rdb/query/{aggregate}.sql` だけ。`sqlcgen.New(tx)` を直接呼ぶ。tx は `tx.From(ctx)` から取り、無ければ `ErrNoTransaction` | [sqlc-and-tx.md](references/sqlc-and-tx.md) |
-| 5 | エラー翻訳 | 制約違反 → ドメインの sentinel、`ErrNoRows` → `rdb.ErrNotFound`、楽観ロック 0 行と版の一意制約違反 → `rdb.ErrConflict`。書き込みの error は全部 `translateConstraint` に通す。文脈は `fmt.Errorf("予約 %s の保存: %w", id, err)` で 1 回 | [error-translation.md](references/error-translation.md) |
+## 判断基準
+
+### テーブルの型を写す
+
+リソース、基底イベント、詳細イベント、派生のテーブル、技術的な処理の表を、資料のとおりに読み書きする。版はイベントの版を写し、同じ版の衝突は一意制約の違反を「同時更新で競合した」へ翻訳する。出来事の時点は、イベントが業務の時刻を持てばそれを、持たなければ Clock から一度だけ取る。詳しくは [テーブルの型の写し方](references/tables.md) を読む。
+
+### Find と Apply
+
+ctx のトランザクションを必須にし、無ければ「分類不能」を返す。Find は、完全な集約を一つ返し、集約の外の事実を読んで初期状態の型へ持たせるだけで判断しない。Apply は、イベントを書いて error だけを返す。保存値を値オブジェクトが拒んだら、データの破損として「回復不能」へ付け替える。SQL は、物理設計の読み取りの台帳と書き込みに対応するものだけにする。詳しくは [Find と Apply](references/find-and-apply.md) を読む。
+
+### 単純なパターンの口
+
+手順が所有する口は、一度に確定させる一つの記録に一つのメソッドで、ctx のトランザクションを必須にし、読み取りの口を呼ばず、判断しない。詳しくは [単純なパターンの口](references/procedure-store.md) を読む。
+
+完全な例は [例：図書館の貸出のリポジトリ](references/example-library.md) にある。
 
 ## 手順
 
-1. **型を決める。** `references` があれば先に読む。データモデル資料のテーブル一覧を読み、`{aggregate}_base_events` と詳細イベント表があればイベント型、無ければ通常型にする。ドメインの `Repository` interface がその型の形（`Apply{Event}` か `Create` / `Update` か）と一致していることを確かめる。完了条件: 集約 1 つに型が 1 つ決まり、実装するメソッドが interface のメソッドと 1:1 で列挙されている
-2. **テーブル操作を表にする。** 資料の「シナリオと記録の対応」から、メソッドごとに各テーブルへの INSERT / UPDATE / DELETE を書き出す。イベント型は 1. current 行（初回は INSERT、以後は楽観ロック付き UPDATE）2. 従属行 3. 基底イベント 4. 詳細イベント の順に並べる。完了条件: 資料の表の各行が、どれか 1 つのメソッドの手順に写っている
-3. **query を書き、生成する。** `rdb/query/{aggregate}.sql` に 2 の操作分の query を `{Get|Insert|Update|Delete}{Table}` で書き、`sqlc generate` で `rdb/sqlcgen` を更新する。楽観ロックの UPDATE は `:execrows`、基底イベントは `RETURNING id` の `:one`。完了条件: 生成が通り、メソッドが使う query がすべて 1 ファイルにあり、テスト用の query が混ざっていない
-4. **marshaller を書く。** `rdb/{aggregate}_marshaller.go` に、ドメイン → Params（イベントまたは状態型ごと）と、行 → 集約（`status` で `Restore*` を選ぶ）を `{元}To{先}` で書く。`status` / `event_type` / `actor_code` の定数もここに置く。完了条件: 行 → ドメインが `New*` と `Restore*` だけを呼び、ドメイン → 行が getter だけを読み、`time.Now()` と `pgtype` の型がドメイン側に現れない
-5. **メソッドを書く。** 各メソッドを `queries(ctx)` で始め、2 の順に生成メソッドを呼び、marshaller を通す。イベント型の UPDATE は 0 行で `ErrConflict`、通常型の UPDATE は 0 行で `ErrNotFound`。書き込み（INSERT / UPDATE / DELETE）の error は全部 `translateConstraint` に通し、文脈を 1 回足して返す。完了条件: メソッドに SQL 文・型スイッチ以外の分岐・`log/slog`・`Begin` / `Commit` が無い
-6. **翻訳表を確かめる。** 資料の「常に守られること」のうち DB 制約で表すものが DDL で名前付き制約になっていて、`translateConstraint` の表でドメインの sentinel と 1:1 に対応している。イベント型なら基底イベントの `(集約 ID, version)` の名前付き一意制約が `ErrConflict` の行にある。完了条件: 翻訳表の制約名が DDL に実在し、対応する sentinel がドメインまたは `rdb` の package にある
-7. **コンパイルを通す。** `go build ./... && go vet ./...`。完了条件: 両方が通る
-8. **報告する。** 「報告」の項目を返す
+1. **資料と対象を揃える。** `references` があれば先に読む。データモデルの資料のテーブルの型と列、物理設計の資料の制約、読み取りの台帳、分離レベルの指定、実装する interface のメソッドを並べる。
+2. **テーブルの操作を決める。** メソッドごとに、読むテーブルと書くテーブル、使う制約、時点の出どころ（イベントか Clock か）を決める。
+3. **query を書き、生成する。** 本番の SQL を query のファイルに書き、`sqlc generate` で生成する。台帳に無い読み取りは足さずに返す。
+4. **変換を書く。** 行とドメインの往復を書き、保存値の破損の付け替えを置く。
+5. **メソッドを書く。** Find、Apply、または口のメソッドを書く。
+6. **翻訳を確かめる。** 物理設計の名前付きの一意制約を、翻訳の対応に載せる。
+7. **機械検査を通す。**
+   ```bash
+   sqlc generate && git diff --exit-code -- '*/sqlcgen/*'
+   go build ./... && go vet ./...
+   go tool golangci-lint run ./...
+   ```
+8. **報告する。** 出力の項目を返す。
 
 ## 停止条件
 
-止まるのは、資料または規約の契約に反する要求、正式な定義に無い決定が要る、利用者の許可が要る、toolが失敗した、のどれかに当たるときで、それ以外の判断の揺れでは止まらない。欠けているのが業務事実（操作・状態・拒む理由・資料が未決と明示した値）なら止まり、命名・分割・定義場所・並び・テストの置き場のような設計判断の揺れなら仮説を明示して進む。
+資料に無いテーブル、列、制約が要ると判断したら、書かずにデータモデルか物理設計の資料へ返す。物理設計の読み取りの台帳に無い読み取りが要るときも、同じく返す。並行実行で必要な保証が論理データモデルにあるのに、物理設計に守り方の指定が無ければ、推測で補わずに物理設計の資料へ返す。データモデルの資料が値の選び方（閾値、経路）を定めていて、それをリポジトリで判断したくなったら、書かずに、判断をコマンドへ移す形を implement-domain-model と資料へ返す。interface に無いメソッド（一覧、件数、存在の確認）が要ると判断したら、読み取りなら implement-query-service へ、そうでなければ implement-domain-model へ返す。
 
-- ドメインに `Repository` interface が無い、または interface の形が型と合わない（イベント型なのに `Update(ctx, agg)` がある、通常型なのに集約が版を持つ） → 実装せず、ドメインの規約へ返す
-- データモデル資料が無い、または集約とテーブルの対応（「シナリオと記録の対応」）が読めない → 資料の作成へ返す
-- interface に無いメソッド（状態指定取得・`Delete`・`Exists`・一覧・件数）を求められた → 足さず、読み取りモデルの関心かドメインの規約かを示して返す
-- 資料の不変条件（重なり禁止・一意）が DDL の制約に無く、リポジトリで `SELECT` して判断しないと守れない → データモデル資料へ返す。リポジトリで判断しない
-- usecase が tx を張っていない前提で「pool を持たせて動くようにして」と求められた → 従わず、usecase の規約へ返す
+止まるときは、書いた範囲と書かなかった範囲を分け、返す先と必要な決定を報告に示す。
 
-止まるときは、書いた範囲と書かなかった範囲を分け、返す先（資料、実装の規約、利用者）と必要な決定を報告に示す。
+query や変換の関数の名前の揺れでは止まらない。規則に最も近い名前を採り、報告に示して進む。
 
-判断の揺れでは、その時点の根拠から最も筋の良い形を仮説として採り、仮説であることと採らなかった形を報告に明示して進む。
+## 出力
 
-- 列と値オブジェクトの対応、marshallerの分割が資料から一意に決まらない: 資料の「シナリオと記録の対応」に最も近い形を採り、報告に仮説と示す。
+実装したメソッドと、それぞれが読み書きするテーブル、時点の出どころ、翻訳の対応（制約の名前と具体エラー）、付け替えの箇所、物理設計の読み取りの台帳との対応、返した論点と返し先、機械検査の結果を報告する。
 
-## チェックリスト
-
-- [ ] メソッドが interface と 1:1。状態指定取得・`Save` / `Update(ctx, agg)`（イベント型）・`Delete` / `Exists` / `List*` を足していない
-- [ ] `FindByID` が和型を返し、current 行から復元している。イベント列を畳み込んでいない
-- [ ] 全メソッドの先頭が `queries(ctx)`。`*pgxpool.Pool` を struct に持たず、`Begin` / `Commit` / `Rollback` を呼んでいない
-- [ ] イベント型の `Apply*` が current 行の UPDATE → 従属行 → 基底イベント → 詳細イベントの順で、照合キーが `evt.Version().Value()-1`、`base_events.version` が `evt.Version().Value()`
-- [ ] marshaller が `{元}To{先}` で、行 → ドメインは `New*` / `Restore*` だけ、ドメイン → 行は getter だけ。`time.Now()` が無い
-- [ ] 行 → ドメインの時刻に `.UTC()` を通し、NULL 列を `(T, bool)` に写している。「起きたかどうか」を current 行の NULL 列で持たず、イベント表の有無で復元している
-- [ ] `translateConstraint` の制約名が DDL の名前付き制約と一致し、翻訳先の sentinel が資料「拒むときの理由」の 1 行に対応している。表に無い制約違反を既定の sentinel へ丸めていない
-- [ ] `ErrNoRows` → `ErrNotFound`、楽観ロック 0 行と版の一意制約違反 → `ErrConflict`、通常型 UPDATE 0 行 → `ErrNotFound` になっている。INSERT / UPDATE / DELETE の error を全部 `translateConstraint` に通している
-- [ ] 文脈は 1 メソッド 1 回。文言に SQL 文・テーブル名・SQLSTATE が無い。`log/slog` を import していない
-
-## 報告
-
-- 集約名と選んだ型（通常型 / イベント型）と、その根拠になった資料のテーブル
-- 実装したメソッドと、各メソッドが触るテーブル操作の表（手順 2 の表）
-- marshaller の一覧（関数名と方向）
-- 翻訳表（制約名 → sentinel）と、翻訳しなかった制約
-- 仮定したこと（資料に無いテーブル・列・getter・物理型）と、資料またはドメインの実装と食い違った点
-- 資料の未決を仮の値で埋めた定数（題材では `actor_code` の `actorDeadlineKeeper` / `actorNoShowKeeper`。物理設計で値が決まるまでの仮の定数）
-- 停止条件で返した論点
+機械検査が通って言えるのは、生成物が SQL と一致し、ビルドと vet と linter に違反が無いことだけである。テーブルの読み書きが資料の Before と After と一致するかは、test-repository のテストと、対象を読んで確かめる。

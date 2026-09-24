@@ -1,165 +1,53 @@
-# Query実装とは何か
+# Query の実装
 
-**Query実装は、ユースケース側が所有する読み取りポートを、DB行から同じ側が所有する読み取りモデルを組み立てることで実装する。** 一覧、件数、検索、ページング、ソート、フィルタ、JOIN、関係集計をSQLで行う。集約・エンティティを復元または操作せず、書き込まず、トランザクションを開始しない。
+# 読み取り専用の接続だけから読む
 
-## 1. 責務
+Query の実装は、読み取り専用の接続（各接続の既定を読み取り専用にした pool）だけから読む。ctx のトランザクションを見ない。「ctx にトランザクションがあれば乗り、無ければ pool で読む」という切り替えを書かない。command は読み取りの口を呼ばないので、Query の実装がトランザクションの中で呼ばれる経路は無い。切り替えを書くと、トランザクションの張り忘れが黙って通る。
 
-| する | しない |
-|---|---|
-| SELECTで必要な行・関係集計を得る | INSERT、UPDATE、DELETE、行ロック |
-| DB行を確定済みの読み取りモデルへ写す | 実装側に公開契約型を再定義する |
-| ctxに既存txがあれば乗り、無ければpoolで読む | Begin、Commit、Rollback |
-| SQLで適切に表せるJOIN、件数、並び順、絞り込み | Goで再ソート、再集計、結果集合の突き合わせ |
-| SQLに適さない業務計算で値オブジェクトまたは純関数を再利用する | 集約・エンティティの復元、操作、状態遷移 |
-
-値オブジェクトや純関数の再利用と、集約の利用を混同しない。たとえば金額丸めや営業時間の計算が業務の同じ定義を必要としSQLに適さない場合、Query実装はドメインの値オブジェクトまたは純関数をimportしてよい。関係集合の件数、合計、最大、最小、JOIN、フィルタはSQLで行う。計算済み列を保存するのは別の要求と整合性根拠がある場合だけであり、値オブジェクトを避ける目的で非正規化しない。
-
-## 2. 契約の所有と依存方向
-
-```text
-外部境界 ──> usecase/query（ポート、読み取りモデル、Page、sentinel）
-                         ^
-                         |
-Query実装 ───────────────┘
-   ├──> DB生成型
-   ├──> DB接続・tx参照
-   └──> 値オブジェクト／純関数（必要な計算だけ）
-```
-
-`usecase/query`は`RoomAvailability`、`ActiveSlot`、`ReservationSummary`、`ReservationHistory`、`HistoryEvent`、`Page`、ページ上限、読み取りsentinel、各読み取りポートを所有する。Query実装はこれらを定義しない。`querycontract "example.com/roomflow/reservation/usecase/query"`をimportし、引数・返り値・sentinelを`querycontract`経由で使う。
-
-## 3. 接続
+sqlc の `Queries` は、書き込みを型で拒む executor で組み立てる。`Exec` を呼ぶと「分類不能」を土台にしたエラーを返し、書き込みの形をした読み取りは PostgreSQL が読み取り専用の接続で拒む。
 
 ```go
-package query
+// ReadExecutor は、読み取り専用の接続を sqlc の DBTX の形にし、Exec だけを拒む。
+type ReadExecutor struct{ reader Reader }
 
-func queries(ctx context.Context, pool *pgxpool.Pool) *sqlcgen.Queries {
-	if current, ok := tx.From(ctx); ok {
-		return sqlcgen.New(current)
-	}
-	return sqlcgen.New(pool)
+func (r ReadExecutor) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
+	return pgconn.CommandTag{}, ErrWriteInReadOnly
 }
 ```
 
-Query実装はtxを開始しない。commandの同一tx内で材料を読む場合だけctx上のtxへ乗り、通常のQueryユースケースからはpoolで読む。
+Query の実装は、トランザクションを張らない。集約を復元せず、操作せず、書き込まない。
 
-## 4. SQL
+# 契約は usecase の側が持つ
 
-SQLはSELECTだけとし、列を明示する。`WHERE`、JOIN、`ORDER BY`、`LIMIT`、`OFFSET`、`count(*)`など関係集合で完結する処理をSQLに置く。1件は`:one`、複数件は`:many`とする。親子一覧では親へページングしてから子をJOINする。
+読み取りのポートと読み取りモデルは、`usecase/query` が所有する（apply-go-package-layout が決める）。Query の実装はそれを満たし、読み取りモデルを返す。集約やエンティティを返さない。読み取りモデルも、業務の概念を値オブジェクトで持つ（write-go-code）。
 
-半開区間の重なりは関係条件なのでSQLに置く。
+# SQL と業務の計算
 
-```sql
-WHERE room_code = $1
-  AND starts_at < $3
-  AND ends_at > $2
-ORDER BY starts_at, reservation_id
-```
+関係の射影、結合、並べ替え、件数、集計は SQL で行う。SQL は、物理設計の読み取りの台帳（Read-002 のような）に載っているものに限る。台帳に無い読み取りが要ると分かったら、足さずに物理設計の資料へ返す。背景処理の走査、監視の集計、書き込みの中の判定条件も、台帳に載る。
 
-SQLに不向きな業務計算は、DB行をprimitiveへ写した後、既存の値オブジェクトまたは純関数を呼ぶ。集約やエンティティを復元しない。
+SQL で書けない業務の計算（延滞の日数を返却期限と時点から数える）は、ドメインの値オブジェクトか純関数を借りて、読み取りモデルを組み立てる時点で呼ぶ。集約は借りない。
 
-## 5. 実装の形
+# 壊れた一件を閉じ込める
+
+互いに独立した複数件を返す読み取りでは、保存値を値オブジェクトへ戻せない一件だけを除き、残りを返す。一覧全体を失敗させない。除いた一件は、除いた場所で ERROR で記録する。そのエラーは境界へ返らないからである（write-logs の「飲み込むなら記録する」）。Query の実装は、そのために logger を注入される。
 
 ```go
-package query
-
-import (
-	"context"
-	"fmt"
-	"time"
-
-	"github.com/jackc/pgx/v5/pgxpool"
-
-	querycontract "example.com/roomflow/reservation/usecase/query"
-	"example.com/roomflow/rdb/sqlcgen"
-)
-
-type RoomAvailabilityQuery struct{ pool *pgxpool.Pool }
-
-func (q *RoomAvailabilityQuery) ListForDay(ctx context.Context, room string, day time.Time) (querycontract.RoomAvailability, error) {
-	dayStart, err := utcDate(day)
+for _, row := range rows {
+	item, err := loanRowToSummary(row)
 	if err != nil {
-		return querycontract.RoomAvailability{}, fmt.Errorf("会議室 %s の空き状況: %w", room, err)
+		// row は DB の生成型の行である。保存値が壊れているので、保存された値のまま記録する。
+		q.logger.LogAttrs(ctx, slog.LevelError, "保存値の壊れた貸出を一覧から除いた",
+			slog.String("loan_id", row.LoanID.String()), slog.Any("err", err))
+		continue
 	}
-	rows, err := queries(ctx, q.pool).ListRoomSlotsForDay(ctx, sqlcgen.ListRoomSlotsForDayParams{RoomCode: room, DayStart: dayStart, DayEnd: dayStart.AddDate(0, 0, 1)})
-	if err != nil {
-		return querycontract.RoomAvailability{}, fmt.Errorf("会議室 %s の空き状況: %w", room, err)
-	}
-	return listRoomSlotsForDayRowsToRoomAvailability(room, rows), nil
-}
-
-func utcDate(day time.Time) (time.Time, error) {
-	u := day.UTC()
-	d := time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
-	if !u.Equal(d) {
-		return time.Time{}, querycontract.ErrDayHasClock
-	}
-	return d, nil
+	items = append(items, item)
 }
 ```
 
-`:one`の対象なしは実装側のerrorへ置き換えず、契約のsentinelへ翻訳する。
+壊れた値を正常な値へ丸めて返さない。クエリそのものの失敗と、一覧の前提を復元できない失敗は、一件に閉じないので、全体を失敗させる。
 
-```go
-if errors.Is(err, pgx.ErrNoRows) {
-	return querycontract.ReservationSummary{}, fmt.Errorf("予約 %s の概要: %w", id, querycontract.ErrNotFound)
-}
-```
+ページを進める目印（カーソル）は、返せた件数ではなく、走査した候補の境界で決める。除いた一件を、次のページで読み直さないためである。
 
-## 6. ページングと履歴
+保存値を値オブジェクトへ戻せないことを、除かずに返すときは、データの破損として「回復不能」へ付け替える（handle-errors の付け替え）。
 
-`Page`、上限、範囲外sentinel、履歴の読み取りモデルも`usecase/query`が所有する。Query実装は検査関数をprivateに持ち、契約の値とerrorを使う。
-
-```go
-func validatePage(page querycontract.Page) error {
-	if page.Limit < 1 || page.Limit > querycontract.MaxPageLimit {
-		return querycontract.ErrPageLimitOutOfRange
-	}
-	if page.Offset < 0 {
-		return querycontract.ErrPageOffsetNegative
-	}
-	return nil
-}
-
-func (q *ReservationHistoryQuery) ListByCustomer(ctx context.Context, customer string, page querycontract.Page) ([]querycontract.ReservationHistory, error) {
-	if err := validatePage(page); err != nil {
-		return nil, fmt.Errorf("顧客 %s の予約履歴: %w", customer, err)
-	}
-	rows, err := queries(ctx, q.pool).ListCustomerHistory(ctx, sqlcgen.ListCustomerHistoryParams{CustomerCode: customer, Limit: int32(page.Limit), Offset: int32(page.Offset)})
-	if err != nil {
-		return nil, fmt.Errorf("顧客 %s の予約履歴: %w", customer, err)
-	}
-	return listCustomerHistoryRowsToReservationHistories(rows), nil
-}
-```
-
-行変換も契約型を返す。
-
-```go
-func listActiveOverlappingClaimsRowsToActiveSlots(rows []sqlcgen.ListActiveOverlappingClaimsRow) []querycontract.ActiveSlot {
-	var slots []querycontract.ActiveSlot
-	for _, row := range rows {
-		slots = append(slots, querycontract.ActiveSlot{ReservationID: row.ReservationID, StartsAt: row.StartsAt.UTC(), EndsAt: row.EndsAt.UTC()})
-	}
-	return slots
-}
-
-func listCustomerHistoryRowToHistoryEvent(row sqlcgen.ListCustomerHistoryRow) querycontract.HistoryEvent {
-	return querycontract.HistoryEvent{Version: int(row.Version), EventType: row.EventType, ActorCode: row.ActorCode, OccurredAt: row.OccurredAt.UTC()}
-}
-```
-
-## 7. エラー
-
-読み取りに固有の公開sentinelは`usecase/query`の契約である。Query実装は新しい公開errorを定義しない。接続断やSQL失敗は分類せず文脈を一度足す。DB制約違反は読み取りでは起こらない。
-
-## 8. commandやworkerの材料
-
-commandが集約へ渡す材料やworkerが処理対象を選ぶ材料も同じポート契約を使う。重複枠は`[]querycontract.ActiveSlot`、無断不利用時刻は`[]time.Time`、期限到来IDは`[]string`を返す。Query実装は材料を選択して写すだけで、資格、期限到来後の状態遷移、重なりの最終判断を行わない。
-
-## 停止
-
-- 読み取りポート、読み取りモデル、Page、必要なsentinelが`usecase/query`に確定していない
-- 必要な値を保存列、SQLの関係計算、確認済みのドメイン値オブジェクトまたは純関数のどれからも導けず、新しい業務規則を発明しなければならない
-- 集約・エンティティの復元や操作が必要とされる
-- 業務計算を再利用できる値オブジェクトまたは純関数がなく、新しい業務規則を発明する必要がある
+作業待ちの行（Outbox の要求）を読む口は、Query の実装ではなく、手順のリポジトリ相当の口である。作業待ちの行は黙って除かない（implement-repository）。

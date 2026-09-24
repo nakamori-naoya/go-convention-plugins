@@ -7,27 +7,27 @@ instructions:
     directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する
 requires: []
 steps:
-  - id: decide-types
+  - id: align-docs-and-target
     agent_work: invoking_agent
-    purpose: "型を決める"
-  - id: map-table-operations
+    purpose: "資料と対象を揃える"
+  - id: decide-table-operations
     agent_work: invoking_agent
-    purpose: "テーブル操作を表にする"
+    purpose: "テーブルの操作を決める"
   - id: write-and-generate-query
     agent_work: invoking_agent
     purpose: "query を書き、生成する"
-  - id: write-marshaller
+  - id: write-conversion
     agent_work: invoking_agent
-    purpose: "marshaller を書く"
+    purpose: "変換を書く"
   - id: write-methods
     agent_work: invoking_agent
     purpose: "メソッドを書く"
-  - id: inspect-error-translation
+  - id: inspect-translation
     agent_work: invoking_agent
-    purpose: "翻訳表を確かめる"
-  - id: compile
+    purpose: "翻訳を確かめる"
+  - id: run-structural-checks
     agent_work: invoking_agent
-    purpose: "コンパイルを通す"
+    purpose: "機械検査を通す"
   - id: report
     agent_work: invoking_agent
     purpose: "報告する"
