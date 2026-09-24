@@ -22,7 +22,7 @@ func NewReturnBook(txm tx.Manager, loans domain.LoanRepository) *ReturnBook {
 }
 
 func (u *ReturnBook) Execute(ctx context.Context, in ReturnBookInput) error {
-	return u.tx.Run(ctx, tx.Options{}, func(ctx context.Context) error {
+	return u.tx.Run(ctx, returnTxOptions, func(ctx context.Context) error {
 		loan, err := u.loans.FindLoan(ctx, in.Loan)
 		if err != nil {
 			return err
@@ -57,14 +57,14 @@ func (u *BorrowBook) Execute(ctx context.Context, in BorrowBookInput) (BorrowBoo
 		if err != nil {
 			return err
 		}
-		res, err := pending.Borrow(loanID, in.LentAt)
+		res, err := pending.Borrow(loanID, in.LentAt, u.calendar)
 		if err != nil {
 			return err
 		}
 		if err := u.loans.ApplyLent(ctx, res.Event); err != nil {
 			return err
 		}
-		out = BorrowBookOutput{Loan: res.Next.ID(), Due: res.Next.Due()}
+		out = BorrowBookOutput{Loan: res.Event.LoanID(), Due: res.Event.Due()}
 		return nil
 	})
 	if err != nil {
@@ -76,7 +76,9 @@ func (u *BorrowBook) Execute(ctx context.Context, in BorrowBookInput) (BorrowBoo
 
 応答に返し、以後その集約を指す識別子は、usecase が採番器から取って、コマンドへ渡す。採番はトランザクションの外で行う。直列化の失敗で手順が呼び直されても、同じ識別子を使うためである。
 
-出力は、コマンドの結果から作る。`Apply` の戻り値から作らない。
+出力は、コマンドの結果のイベントから作る。`Apply` の戻り値から作らない。
+
+日付が要るコマンドへ渡す図書館の暦（`LibraryCalendar`）は、組み立て（main）が設定から一度だけ作り、usecase のコンストラクタで受けて持つ。入力には載せない。要求ごとに変わる値ではないからである。
 
 # 時刻
 
@@ -88,12 +90,19 @@ func (u *BorrowBook) Execute(ctx context.Context, in BorrowBookInput) (BorrowBoo
 
 # 物理設計の指定を渡す
 
-分離レベルと、トランザクションの中でのやり直し（直列化の失敗だけを、回数を限ってやり直す）は、物理設計の資料が操作ごとに決める。usecase は、その指定を `tx.Options` に渡すだけで、自分では選ばない。既定の分離レベルに頼らない。
+分離レベルと、トランザクションの中でのやり直し（どの失敗を、何回までやり直すか）は、物理設計の資料が操作ごとに決める。usecase は、その指定を名前のある `tx.Options` の変数に写して渡すだけで、自分では選ばない。変数の上のコメントに、物理設計のどの節から写したかを一行書く。
 
 ```go
 // borrowTxOptions は、物理設計の「分離性判断: 貸出上限」の指定である。
-var borrowTxOptions = tx.Options{Isolation: tx.Serializable, Retry: tx.RetrySerializationFailures}
+// SERIALIZABLE で、直列化の失敗（40001）だけを最大3回やり直す。
+var borrowTxOptions = tx.Options{Isolation: tx.Serializable, RetryOn: tx.SerializationFailure, MaxRetries: 3}
+
+// returnTxOptions は、物理設計の「分離性判断: 延滞にするのと返却が重なる」の指定である。
+// READ COMMITTED で、やり直さない。
+var returnTxOptions = tx.Options{Isolation: tx.ReadCommitted}
 ```
+
+`tx.Options` のゼロ値は、指定が無いことを表す。トランザクションの管理は、分離レベルの無い指定を受けたら、張らずに分類不能を返す。既定の分離レベルに頼ると、物理設計の指定を渡し忘れたことに誰も気づかないからである。やり直しの回数も `tx.Options` が運び、トランザクションの管理の側に既定の回数を置かない。
 
 Find の読み取りは、この指定のトランザクションの中で行われる。論理データモデルに並行実行の保証が書かれているのに、物理設計に指定が無ければ、推測で補わずに物理設計の資料へ返す。
 
