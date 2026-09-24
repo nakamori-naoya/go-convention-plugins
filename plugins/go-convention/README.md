@@ -1,6 +1,6 @@
 # go-convention
 
-**Go 1.27 の実装とテストの規約を、関心ごとに分けた 14 の自己完結skillと、層ごとの TDD 入口 4 つから適用します。** package manifestが`skills/<name>/SKILL.md`を直接公開し、規約の基準資料は各skill、工程順序の定義は同じdirectoryの`playbook.yml` v2にあります。同じagentが`agent_work: invoking_agent`の工程を宣言順に実行します。
+**Go 1.27 の実装とテストの規約を、関心ごとに分けた 14 の自己完結skillと、TDD の 1 単位の入口 1 つから適用します。** package manifestが`skills/<name>/SKILL.md`を直接公開し、規約の基準資料は各skill、工程順序の定義は同じdirectoryの`playbook.yml` v2にあります。同じagentが`agent_work: invoking_agent`の工程を宣言順に実行します。
 
 ## これは何か／何ではないか
 
@@ -24,14 +24,11 @@
 | `apply-go-test-convention` | テストの形（テーブル駆動・id/name/description・Given/When/Then） |
 | `test-domain-model` | 集約・エンティティ・値オブジェクトのテストを資料の BDD から書く |
 | `test-repository` | 永続化層（リポジトリ・query service）のテストをデータモデル資料から書く |
-| `test-usecase` | usecase のテストを 5 観点で書く |
-| `test-handler` | handler のテストを本番同等 DI で書く |
-| `develop-domain-model` | ドメイン層の 1 単位（集約または値オブジェクト）を、テスト → 赤 → 実装 → 緑 → 整える の順で完成させる |
-| `develop-repository` | 永続化層の 1 単位（リポジトリまたは query service）を同じ順で完成させる |
-| `develop-usecase` | usecase 1 つを同じ順で完成させる |
-| `develop-handler` | RPC 1 つを同じ順で完成させる（エラーの対応表とログも揃える） |
+| `test-usecase` | usecase のテストを、配線と境界だけを実物で確かめる形で書く |
+| `test-handler` | API のテストを、本番の組み立てで外部の境界だけを差し替えて書く |
+| `develop-go-unit` | Go の 1 単位（ドメイン、リポジトリ、Query の実装、usecase、入口のどれか一つ）を、テスト → 赤 → 実装 → 緑 → 整える の順で完成させる |
 
-`develop-<layer>` は `playbook.yml` の `skill:` 工程で同じ package の `test-<layer>` → `implement-<layer>`（永続化層は対象により `implement-repository` / `implement-query-service`）→ `write-go-code`（必要なら `handle-errors` / `write-logs`）を順に呼びます。テストの規約と実装の規約は別 file のままです。
+`develop-go-unit` は `playbook.yml` の `skill:` 工程で、層（`unit.layer`）に応じた同じ package の `test-*` → `implement-*` → `write-go-code`（必要なら `handle-errors` / `write-logs`）を順に呼びます。テストの規約と実装の規約は別 file のままです。
 
 ## 入力
 
