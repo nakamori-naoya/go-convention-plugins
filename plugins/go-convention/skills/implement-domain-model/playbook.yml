@@ -7,21 +7,21 @@ instructions:
     directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する
 requires: []
 steps:
-  - id: map-source-to-code
+  - id: read-model-and-decide-mapping
     agent_work: invoking_agent
-    purpose: "資料を読み、対応表を作る"
+    purpose: "資料を読み、対応を決める"
   - id: implement-value-objects
     agent_work: invoking_agent
     purpose: "値オブジェクトを書く"
   - id: implement-aggregate
     agent_work: invoking_agent
     purpose: "集約を書く"
-  - id: implement-sentinels-and-events
+  - id: implement-errors-and-events
     agent_work: invoking_agent
-    purpose: "sentinel とイベントを書く"
-  - id: implement-filter-restore-port
+    purpose: "エラーとイベントを書く"
+  - id: implement-repository-port
     agent_work: invoking_agent
-    purpose: "絞り込み・復元・永続化ポートを書く"
+    purpose: "永続化ポートを書く"
   - id: run-structural-checks
     agent_work: invoking_agent
     purpose: "機械検査を通す"
