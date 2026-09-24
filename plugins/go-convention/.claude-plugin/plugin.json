@@ -20,10 +20,7 @@
     "./skills/test-repository",
     "./skills/test-usecase",
     "./skills/test-handler",
-    "./skills/develop-domain-model",
-    "./skills/develop-repository",
-    "./skills/develop-usecase",
-    "./skills/develop-handler"
+    "./skills/develop-go-unit"
   ],
   "interface": {
     "displayName": "Go Convention",
