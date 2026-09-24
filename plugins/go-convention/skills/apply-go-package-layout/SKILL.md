@@ -1,6 +1,6 @@
 ---
 name: apply-go-package-layout
-description: 確定した論理責務、集約の境界、実装パターン（戦術的 DDD か単純なパターンか）を、Go 1.27 の package の木と import の向きへ写し、配置の違反を直す。文脈共有の値オブジェクト（クラス図の <<値オブジェクト・文脈共有>>）の置き場、プロセス間のメッセージの契約の置き場、横断的関心事の置き場も決める。「Go の package をどう切るか」「この責務をどこへ置くか」「共有の値オブジェクトをどこに置くか」「import の循環を避けて配置して」と言われ、論理的な所有者が既に決まっているときに使う。論理責務と実装パターンの判断は apply-layer-convention へ返す。
+description: 確定した論理責務、集約の境界、実装パターン（集約で業務規則を守る戦術的 DDD か、集約を作らず手順として書く単純なパターンか）を、Go 1.27 の package の木と import の向きへ写し、配置の違反を直す。文脈共有の値オブジェクト（クラス図の <<値オブジェクト・文脈共有>>）の置き場、プロセス間のメッセージの契約の置き場、横断的関心事の置き場も決める。「Go の package をどう切るか」「この責務をどこへ置くか」「共有の値オブジェクトをどこに置くか」「import の循環を避けて配置して」と言われ、論理的な所有者が既に決まっているときに使う。論理責務と実装パターンの判断は apply-layer-convention へ返す。
 ---
 
 # apply-go-package-layout
@@ -13,7 +13,7 @@ description: 確定した論理責務、集約の境界、実装パターン（�
 
 中心にあるのは一つの考えである。**import は外側から内側へだけ向かい、置き場はどれも一つの責務を持つ。** 文脈共有の値オブジェクトとプロセス間のメッセージは、責務を定めた共有の置き場に置く。禁じるのは `shared` という名前ではなく、責務を定めない逃げ場である。
 
-論理責務（ドメイン、リポジトリ、command と query の usecase、入口、Query の実装、単純なパターンの手順）と、どの処理を戦術的 DDD で書くかは、apply-layer-convention が決める。ここでは決めない。
+論理責務（ドメイン、リポジトリ、command と query の usecase、外からの要求を受けて usecase を呼ぶ入口（RPC の handler、メッセージの受信、ワーカーの巡回）、Query の実装、単純なパターンの手順）と、どの処理を戦術的 DDD で書くかは、apply-layer-convention が決める。ここでは決めない。
 
 ## 入力
 
@@ -25,16 +25,16 @@ Go module の root の絶対 path と `go.mod` の module path、業務文脈と
 
 木、共有の置き場、import の向き、package の名前は、[package の木と import の向き](references/package-layout.md) に従う。要点は次のとおりである。
 
-ドメインは、標準ライブラリ、エラーの分類、文脈共有の値オブジェクトだけを import する。command の usecase は、読み取りの usecase と Query の実装を import しない。材料は Find が集めるからである。入口は usecase だけを import し、実装を結ぶのは組み立ての場所だけである。単純なパターンの手順は、自分が所有するポートを import し、DB の生成型を import しない。
+ドメインは、標準ライブラリ、エラーの分類、文脈共有の値オブジェクトだけを import する。command の usecase は、読み取りの usecase と Query の実装を import しない。コマンドの判断に要る値は、リポジトリの Find（集約を復元するメソッド）が集めるからである。入口は usecase だけを import する。リポジトリや Query の実装を usecase へ渡すのは、組み立てを行う `run` だけである。単純なパターンの手順は、自分が所有するポートを import し、DB の生成型を import しない。
 
 文脈共有の値オブジェクトは `internal/shared/vo`、プロセス間のメッセージの契約は `internal/contracts`、横断的関心事は `internal/crosscutting` に置く。
 
 ## 手順
 
-1. **論理入力を確かめる。** `references` があれば先に読む。各要素に、業務文脈、集約または手順、論理責務、依存先があることを確かめる。ドメインモデルの資料から、文脈共有の印の付いた値を拾う。
+1. **入力の論理責務を確かめる。** `references` があれば先に読む。各要素に、業務文脈、集約または手順、論理責務、依存先があることを確かめる。ドメインモデルの資料から、文脈共有の印の付いた値を拾う。
 2. **木へ写す。** 各要素を一つの directory へ対応させる。空の directory を作らない。
 3. **package の名前と公開面を決める。** directory の末尾を package の名前にし、衝突は呼び手の import の別名で解く。公開するのは、その責務が外へ提供する契約だけにする。
-4. **import の向きを直す。** 許されない向きの import を直す。循環を、interface の複製や転送の package で隠さない。
+4. **import の向きを直す。** 許されない向きの import を直す。循環を、interface の複製や、別の package の型を名前だけ出し直す中継の package で隠さない。
 5. **参照を直して確かめる。** import の path、生成の設定、テストの package、組み立ての参照を新しい配置へ直し、次を通す。
    ```bash
    gofmt -l .

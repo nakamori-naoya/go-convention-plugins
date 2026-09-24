@@ -1,6 +1,6 @@
 ---
 name: test-handler
-description: Connect-RPC の入口を、本番と同じ組み立ての関数で httptest.NewServer に起動し、生成したクライアントで公開の API として叩くテスト（API のテスト）を書く・直す。差し替えるのは外部のトークン検証のポートと時計と採番器だけで、認証と認可の interceptor は本物を通す。成功と反映、分類ごとの Code と公開の文言、認証と認可、入口での変換を確かめる。「この RPC のテストを書いて」「API のテストを足して」と言われたときに使う。handler の単体のテスト、偽の usecase やリポジトリへの差し替え、業務の境界、行の全列、トランザクションの境界、ログの有無は対象外として、test-domain-model、test-repository、test-usecase、apply-go-test-convention へ返す。
+description: Connect-RPC の handler（外からの要求を受けて usecase を呼ぶ入口）を、本番と同じ組み立ての関数で httptest.NewServer に起動し、生成したクライアントで公開の API として叩くテスト（API のテスト）を書く・直す。差し替えるのは外部のトークン検証のポートと時計と採番器だけで、認証と認可の interceptor は本物を通す。成功と反映、分類ごとの Code と公開の文言、認証と認可、入口での変換を確かめる。「この RPC のテストを書いて」「API のテストを足して」と言われたときに使う。handler の単体のテスト、偽の usecase やリポジトリへの差し替え、業務の境界、行の全列、トランザクションの境界、ログの有無は対象外として、test-domain-model、test-repository、test-usecase、apply-go-test-convention へ返す。
 ---
 
 # test-handler
