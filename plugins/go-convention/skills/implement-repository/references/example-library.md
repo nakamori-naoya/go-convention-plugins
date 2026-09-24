@@ -13,7 +13,7 @@ var ErrLoanVersionConflict = errors.Define(errors.ErrConflict, "貸出が先に�
 
 // loanConstraints は、物理設計の一意制約の名前から具体エラーへの対応である。
 var loanConstraints = rdb.Constraints{
-	"loan_current_states_book_active_key": domain.ErrBookOnLoan,
+	"loans_book_active_key":             domain.ErrBookOnLoan,
 	"loan_base_events_loan_version_key":   ErrLoanVersionConflict,
 }
 ```
@@ -47,7 +47,7 @@ usecase は、物理設計の指定（`SERIALIZABLE`、直列化の失敗だけ�
 # ApplyLent
 
 ```go
-// ApplyLent は、貸出と、その最初の出来事を記録し、貸出のいまの状態を加える。
+// ApplyLent は、貸出と、その最初の出来事を記録する。
 // 出来事の時点は、貸出の時点（コマンドの引数）をそのまま使い、Clock を読まない。
 func (r *LoanRepository) ApplyLent(ctx context.Context, evt domain.Lent) error {
 	q, err := r.queries(ctx)
@@ -56,6 +56,7 @@ func (r *LoanRepository) ApplyLent(ctx context.Context, evt domain.Lent) error {
 	}
 	loanID := rdb.IDColumn(evt.LoanID())
 	eventID := rdb.UUIDColumn(r.ids.NewID())
+	// 貸出の行は、状態 lent と版1を持って生まれる。
 	if err := q.InsertLoan(ctx, lentToInsertLoanParams(loanID, evt)); err != nil {
 		return rdb.Translate(ctx, err, loanConstraints)
 	}
@@ -71,19 +72,16 @@ func (r *LoanRepository) ApplyLent(ctx context.Context, evt domain.Lent) error {
 	if err := q.InsertLoanLentEvent(ctx, sqlcgen.InsertLoanLentEventParams{EventID: eventID, DueOn: dateColumn(evt.Due())}); err != nil {
 		return rdb.Translate(ctx, err, loanConstraints)
 	}
-	if err := q.InsertLoanCurrentState(ctx, lentToInsertCurrentStateParams(loanID, evt)); err != nil {
-		return rdb.Translate(ctx, err, loanConstraints)
-	}
 	return nil
 }
 ```
 
-同じ本を二人が同時に借りると、後の一方の `InsertLoanCurrentState` が部分一意 index の違反になり、翻訳表で「貸出中の本を借りる」になる。
+同じ本を二人が同時に借りると、後の一方の `InsertLoan` が部分一意 index（`loans_book_active_key`）の違反になり、翻訳表で「貸出中の本を借りる」になる。
 
 # ApplyReturned
 
 ```go
-// ApplyReturned は、返却の出来事を記録し、貸出のいまの状態を返却済みにする。
+// ApplyReturned は、返却の出来事を記録し、貸出の状態を返却済みにする。
 // 返却は業務の時刻を持たないので、出来事の時点を Clock から一度だけ取る。
 func (r *LoanRepository) ApplyReturned(ctx context.Context, evt domain.Returned) error {
 	q, err := r.queries(ctx)
@@ -99,8 +97,13 @@ func (r *LoanRepository) ApplyReturned(ctx context.Context, evt domain.Returned)
 	if err := q.InsertLoanReturnedEvent(ctx, eventID); err != nil {
 		return rdb.Translate(ctx, err, loanConstraints)
 	}
-	if err := q.UpdateLoanCurrentState(ctx, returnedToUpdateCurrentStateParams(evt)); err != nil {
+	// 読んだ版（イベントの版の一つ前）を条件に、状態と版を進める。0件なら先に別の操作が進めた。
+	updated, err := q.UpdateLoanState(ctx, returnedToUpdateLoanStateParams(evt))
+	if err != nil {
 		return rdb.Translate(ctx, err, loanConstraints)
+	}
+	if updated == 0 {
+		return ErrLoanVersionConflict
 	}
 	return nil
 }
