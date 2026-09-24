@@ -26,9 +26,12 @@ type PublishOverdueNotices struct {
 // claimTxOptions は、物理設計の「分離性判断: 通知の要求の回収」の指定である。READ COMMITTED で、やり直さない。
 var claimTxOptions = tx.Options{Isolation: tx.ReadCommitted}
 
-// recordTxOptions は、物理設計の制約「成功と失敗はどちらか一つ」を確かめて書くトランザクションの指定である。
-// 見本の物理設計は分離レベルを書いていないので、ここでは READ COMMITTED を仮置きし、物理設計へ返している。
+// recordTxOptions は、物理設計の「成功と失敗はどちらか一つ」の指定である。
+// READ COMMITTED で、要求の行を FOR UPDATE でロックしてから書き（口が行う）、やり直さない。
 var recordTxOptions = tx.Options{Isolation: tx.ReadCommitted}
+
+// maxClaims は、打ち切るまでの回収の回数である。データモデルの資料の仮置き（5回。仮説）。
+var maxClaims = contract.NewClaimLimit(5)
 
 func (u *PublishOverdueNotices) Execute(ctx context.Context) error {
 	var candidates []contract.ClaimCandidate
@@ -62,15 +65,20 @@ func (u *PublishOverdueNotices) Execute(ctx context.Context) error {
 
 // publishOne は、一件を回収し、送り、送ったことを記録する。回収と記録はそれぞれのトランザクションで確定させ、送るのはその間の外で行う。
 func (u *PublishOverdueNotices) publishOne(ctx context.Context, c contract.ClaimCandidate) error {
+	// 回収の回数が上限を超える要求は、回収せずに打ち切る。比較は手順が行い、口は記録するだけである。
+	if c.NextVersion().Exceeds(maxClaims) {
+		return u.tx.Run(ctx, recordTxOptions, func(ctx context.Context) error {
+			return u.requests.RecordFailed(ctx, c.RequestID(), contract.ReasonClaimLimitReached)
+		})
+	}
 	var claim contract.Claim
-	var claimed bool
 	err := u.tx.Run(ctx, claimTxOptions, func(ctx context.Context) error {
 		var err error
-		claim, claimed, err = u.requests.Claim(ctx, u.relay, c)
+		claim, err = u.requests.Claim(ctx, u.relay, c)
 		return err
 	})
-	if err != nil || !claimed {
-		return err // claimed が false なら、回収の回数が上限に達し、口が打ち切りを記録した
+	if err != nil {
+		return err
 	}
 	if err := u.publisher.Publish(ctx, claim.RequestID(), claim.Notice()); err != nil {
 		return u.recordFailed(ctx, claim, err)
@@ -88,7 +96,7 @@ func (u *PublishOverdueNotices) recordFailed(ctx context.Context, claim contract
 		return cause
 	}
 	if err := u.tx.Run(ctx, recordTxOptions, func(ctx context.Context) error {
-		return u.requests.RecordFailed(ctx, claim, contract.FailureReasonOf(cause))
+		return u.requests.RecordFailed(ctx, claim.RequestID(), contract.FailureReasonOf(cause))
 	}); err != nil {
 		return err
 	}
@@ -96,7 +104,7 @@ func (u *PublishOverdueNotices) recordFailed(ctx context.Context, claim contract
 }
 ```
 
-候補を選ぶのは一つのトランザクションで、一件ごとの回収、送ったことの記録、失敗の記録は、それぞれ別のトランザクションで確定させる。外部への発行は、どのトランザクションの外でも行う。同時の回収の衝突は、口が「同時更新で競合した」を返し、処理の表で一件に閉じた失敗として次の候補へ進む。回収の回数の上限は、口の `Claim` が判断する（implement-repository の単純なパターンの口）。手順は、上限の数を知らない。
+候補を選ぶのは一つのトランザクションで、一件ごとの回収、送ったことの記録、失敗の記録は、それぞれ別のトランザクションで確定させる。外部への発行は、どのトランザクションの外でも行う。同時の回収の衝突は、口が「同時更新で競合した」を返し、処理の表で一件に閉じた失敗として次の候補へ進む。回収の回数の上限は、データモデルの資料の値を手順が名前のある値として持ち、候補の次の回収の版と比べる。超えたら回収せずに、口の `RecordFailed` で打ち切る。口は比べない（implement-repository の単純なパターンの口）。
 
 # 失敗の扱い
 
