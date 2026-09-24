@@ -1,82 +1,20 @@
-# Query の形
+# query の形
 
-**Query のユースケースは、自分が所有する読み取りポートと読み取りモデルを通じて問いを実行する。Query 実装がその契約へ依存する。集約を復元せず、集約リポジトリを呼ばず、書かず、トランザクションを開始しない。**
+query の usecase は、読み取りのポートを呼び、読み取りモデルを返す。集約を復元せず、書き込まず、トランザクションを張らない。
 
-## 読み取りポートと読み取りモデル
-
-読み取りポートは使う側の package に置く。返り値も同じ側が所有する、primitive だけの平坦な読み取りモデルにする。Query 実装側の型を返り値にすると依存方向が外向きになるため禁止する。
+読み取りのポートと読み取りモデルは、`usecase/query` の package が所有する（apply-go-package-layout）。ポートの実装は、implement-query-service が書く。読み取りモデルも、業務の概念を値オブジェクトで持つ。
 
 ```go
-package query
-
-import (
-	"context"
-	"errors"
-	"time"
-)
-
-const MaxPageLimit = 100
-
-const (
-	StatusTentative = "tentative"
-	StatusConfirmed = "confirmed"
-)
-
-var (
-	ErrNotFound            = errors.New("読み取り対象が見つからない")
-	ErrDayHasClock         = errors.New("時刻を含む日付では読み取れない")
-	ErrPageLimitOutOfRange = errors.New("取得件数が範囲にない")
-	ErrPageOffsetNegative  = errors.New("取得開始位置が負")
-)
-
-type Page struct { Limit, Offset int }
-
-type AvailableSlot struct {
-	ReservationID string
-	StartsAt, EndsAt time.Time
-	Status string
-	HoldExpiresAt time.Time
-	HasHoldExpiresAt bool
+// ListOverdueCandidates は、確かめた時点で返却期限を過ぎた、貸出中の貸出を返す。
+type ListOverdueCandidates struct {
+	loans OverdueCandidateReader
 }
-type RoomAvailability struct {
-	RoomCode string
-	Slots    []AvailableSlot
-}
-type ActiveSlot struct { ReservationID string; StartsAt, EndsAt time.Time }
-type WaitingEntry struct { WaitlistID string }
-type ReservationSummary struct { ReservationID, RoomCode, Status string; StartsAt, EndsAt time.Time }
-type HistoryEvent struct { Version int; EventType, ActorCode string; OccurredAt time.Time }
-type ReservationHistory struct {
-	ReservationID, RoomCode, Status string
-	StartsAt, EndsAt time.Time
-	Events []HistoryEvent
-}
-type RoomAvailabilityReader interface {
-	ListForDay(ctx context.Context, room string, day time.Time) (RoomAvailability, error)
-}
-type ActiveReservationReader interface {
-	ListActiveOverlapping(context.Context, string, time.Time, time.Time) ([]ActiveSlot, error)
-}
-type ReservationHistoryReader interface {
-	ListByCustomer(context.Context, string, Page) ([]ReservationHistory, error)
-	CountByCustomer(context.Context, string) (int, error)
+
+func (u *ListOverdueCandidates) Execute(ctx context.Context, at domain.CheckedAt) ([]domain.LoanID, error) {
+	return u.loans.ListOverdueCandidates(ctx, at)
 }
 ```
 
-| 項目 | 規則 |
-|---|---|
-| 所有者 | 読み取りポートと読み取りモデルはユースケース側 |
-| 依存 | Query 実装がユースケース側の契約 package を import する |
-| 引数 | `string`、`time.Time` など解決済みの値。VO を渡さない |
-| 返り値 | primitive だけの読み取りモデル。集約・VO・DB行・protoを返さない |
-| tx | Query ユースケースは開始しない。実装は ctx に既存 tx があれば乗る |
+入力は値オブジェクトで受ける。入力から、どの読み取りのポートを呼ぶかを選ぶ（進行中なら現在の表、終わったなら履歴）のは usecase の関心で、SQL、並び、集計は実装の関心である。
 
-入力の解決と読むソースの選択はユースケースが行う。SQL、並び順、集計、ページングは読み取りポートの実装が行う。エラーを見て別ソースへ倒すフォールバック、既定値への丸め、Go側での再ソートは行わない。
-
-command が集約へ渡す材料を読む場合も契約の所有者と依存方向は同じである。違いは command のトランザクション内で呼ばれ、Query 実装が ctx 上の同じ tx に乗る点だけである。
-
-## 停止
-
-- 読み取りポートまたは読み取りモデルが確定していない
-- Query 実装側の型をユースケースが import する構成を求められた
-- 集約の復元、書き込み、業務判断を Query に求められた
+command の usecase は、query の usecase も読み取りのポートも呼ばない。一覧を選んで一件ずつ command を呼ぶのは、入口（巡回、implement-handler）の仕事である。

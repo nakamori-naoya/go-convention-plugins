@@ -7,24 +7,24 @@ instructions:
     directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する
 requires: []
 steps:
-  - id: split-usecase
+  - id: confirm-pattern
     agent_work: invoking_agent
-    purpose: "usecase を切る"
-  - id: decide-io-id-time-ownership
+    purpose: "形を確かめる"
+  - id: decide-input-output
     agent_work: invoking_agent
-    purpose: "Input / Output と、ID・時刻の持ち主を決める"
-  - id: order-dependencies
+    purpose: "入力と出力を決める"
+  - id: list-dependencies
     agent_work: invoking_agent
     purpose: "依存を並べる"
-  - id: decide-aggregate-coordination
+  - id: decide-transaction
     agent_work: invoking_agent
-    purpose: "集約の協調を決める"
+    purpose: "トランザクションを決める"
   - id: write-execute
     agent_work: invoking_agent
     purpose: "`Execute` を書く"
-  - id: compile
+  - id: run-structural-checks
     agent_work: invoking_agent
-    purpose: "コンパイルを通す"
+    purpose: "機械検査を通す"
   - id: report
     agent_work: invoking_agent
     purpose: "報告する"
