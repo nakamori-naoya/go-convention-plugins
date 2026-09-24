@@ -15,3 +15,7 @@
 - 逃げ道・「〜してもよい」の連発・smell の列挙・反論と応答の羅列をしない。後方互換は考慮しない。
 - 変更後は `bash scripts/validate.sh` と、workspace root の `bash ../scripts/validate.sh "$(pwd)"` を実行する。
 - install cache は編集せず、この source を参照元として変更する。
+
+## 検査スクリプトは、意味が一意に決まることだけを判定する
+
+このrepositoryの検査スクリプト（validate、lint、verify、checkなど、名前を問わない）が判定してよいのは、ファイルや見出しの有無、識別子や版の一致、宣言と配置の対応、禁止された書き方の有無のように、入力と基準資料から意味が決定論的に一意に決まることだけである。読んで解釈しないと決まらないことや、件数や語の出現のような品質の代わりの指標は判定せず、エージェントが読んで評価する（意味評価）。判定が一意に決まることを宣言できない検査は作らず、詳しい条件は `/Users/naoya-nakamoriq/Documents/Github/harness-pluginsv2/.agents/rules/deterministic-validation.md` に従う。
