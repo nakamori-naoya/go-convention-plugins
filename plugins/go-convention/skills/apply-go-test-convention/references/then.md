@@ -10,7 +10,7 @@
 | `{pkg}_test` から期待値を構築できる | `want` | 型は戻り値そのまま |
 | 構築できない（非公開フィールドを持つ・生成に資源が要る） | `want{何}`（`wantLo` / `wantHi` / `wantSize`） | 公開メソッドの射影と突き合わせる |
 | 共同作業者への副作用 | `want{何}`（`wantFiles`） | `fixture` 経由で公開の手段で観測し、ループ本体で突き合わせる。無いことの期待はゼロ値（フィールドを書かない） |
-| エラー | `wantErr error` | sentinel を入れる。`nil` は成功の期待 |
+| エラー | `wantErr error` | 対象が返す具体エラー（分類を土台にしたもの）を入れる。`nil` は成功の期待 |
 | `got` の性質で、等値で書けないもの | `verify func(t *testing.T, got X)` | 表を書く時点で値が決まらない性質（絶対パスである・ソート済み・範囲内）。エラーと副作用には使わない（届かない） |
 
 `wantErr bool` / `errContains` は使わない（理由は [table.md](table.md) §2）。
