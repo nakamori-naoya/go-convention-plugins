@@ -7,9 +7,9 @@
 日本語で、句点を付けず、「〜した」「〜できなかったため次へ進む」のように、出来事と取った行動を書く。エラーの文言をメッセージに写さない。エラーは属性で出る。
 
 ```go
-logger.LogAttrs(ctx, slog.LevelInfo, "延滞の確認の巡回を終えた",
+logger.LogAttrs(ctx, slog.LevelInfo, "延滞の通知の発行を終えた",
 	slog.Int("candidates", len(candidates)),
-	slog.Int("overdue", marked),
+	slog.Int("published", published),
 )
 ```
 
