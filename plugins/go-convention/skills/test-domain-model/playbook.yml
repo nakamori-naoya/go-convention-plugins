@@ -7,21 +7,18 @@ instructions:
     directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する
 requires: []
 steps:
-  - id: compare-source-and-implementation
+  - id: align-docs-and-target
     agent_work: invoking_agent
-    purpose: "資料と実装を突き合わせる"
-  - id: list-test-functions
+    purpose: "資料と対象を揃える"
+  - id: assign-bdd
     agent_work: invoking_agent
-    purpose: "テスト関数の一覧を作る"
-  - id: copy-source-cases
+    purpose: "BDD を割り振る"
+  - id: write-tables
     agent_work: invoking_agent
-    purpose: "資料のケースを写す"
-  - id: add-derived-cases
+    purpose: "テスト関数ごとに表を書く"
+  - id: write-single-loop
     agent_work: invoking_agent
-    purpose: "資料に無いケースを足す"
-  - id: write-omission-comments
-    agent_work: invoking_agent
-    purpose: "末尾コメントを書く"
+    purpose: "ループ本体を一回書く"
   - id: run-structural-checks
     agent_work: invoking_agent
     purpose: "機械検査を通す"

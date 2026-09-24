@@ -1,56 +1,71 @@
-# Go package treeとimport規律
+# package の木と import の向き
 
-## 論理責務からdirectoryへの対応
+# 木
 
-確定済みの業務文脈を`{context}`、集約を`{aggregate}`として次へ写す。
+確定した業務文脈を `{context}`、集約を `{aggregate}`、単純なパターンの手順を `{procedure}` として、次の木へ写す。directory は、責務が実在する場合だけ作る。空の directory を作らない。
 
-| 論理責務 | Go directory | 所有するもの |
-|---|---|---|
-| ドメイン | `{context}/{aggregate}/domain` | 集約、エンティティ、値オブジェクト、純関数、業務イベント、集約リポジトリinterface |
-| 集約リポジトリ実装 | `{context}/{aggregate}/repository` | 集約の復元・保存、永続化変換、DB制約違反の翻訳 |
-| Commandユースケース | `{context}/{aggregate}/usecase/command` | 入力、時刻・ID供給、集約操作、トランザクション |
-| Query契約とユースケース | `{context}/{aggregate}/usecase/query` | 読み取りポートinterface、平らな読み取りモデル、Queryユースケース |
-| Query実装 | `{context}/{aggregate}/query` | SQL・読み取り・集計、行から読み取りモデルへの変換 |
-| Command外部境界 | `{context}/{aggregate}/handler/command` | 転送入力からCommand入力への変換、Command結果の転送 |
-| Query外部境界 | `{context}/{aggregate}/handler/query` | Query入力の変換、読み取りモデルから転送型への項目コピー |
-| 複数集約書き込みの調整 | `{context}/orchestration/usecase/command` | 複数の集約リポジトリポートを使う一つのCommandとトランザクション |
-
-directoryは責務が実在する場合だけ作る。`domain/query`は作らない。`orchestration`は`domain`、`repository`、`query`を持たない。
-
-## import許可表
-
-| 呼び元 | importしてよい内側の責務 | 禁止する責務 |
-|---|---|---|
-| `domain` | Go標準・値の実装に必要な純粋ライブラリ | repository、usecase、query、handler、転送型、DB生成型 |
-| `repository` | domain、DB接続・生成型 | usecase、query実装、handler |
-| `usecase/command` | domainのポートと型、`usecase/query`の読み取り契約、トランザクション抽象 | repository実装、query実装、handler、転送型 |
-| `usecase/query` | domainの値オブジェクト・純関数を入力解決に使う場合だけ | repository実装、query実装、handler、DB生成型 |
-| `query` | `usecase/query`の契約、DB接続・生成型、domainの値オブジェクト・純関数を計算に使う場合だけ | 集約の復元・操作、repository実装、handler |
-| `handler/command` | `usecase/command`、転送型 | repository実装、query実装、DB生成型 |
-| `handler/query` | `usecase/query`、転送型 | repository実装、query実装、DB生成型 |
-| 横断調整Command | 複数集約のdomainポートと型、`usecase/query`の読み取り契約、トランザクション抽象 | repository実装、query実装、handler |
-
-Query実装は`usecase/query`にあるinterfaceを構造的に満たす。`usecase/query`がQuery実装の型をimportしてはならない。読み取りモデルも`usecase/query`が定義し、Query実装はその型を返す。
-
-## package名
-
-directory末尾とpackage名を一致させると、`domain`、`repository`、`command`、`query`が複数importで衝突する場合がある。衝突は呼び手のimport aliasで解消する。
-
-```go
-import (
-    reservationdomain "example.com/roomflow/booking/reservation/domain"
-    querycontract "example.com/roomflow/booking/reservation/usecase/query"
-)
+```text
+internal/
+├── crosscutting/          横断的関心事（errors、log、clock、idgen、tx、rdb、config、dockertest、integrationtest）
+├── shared/vo/             文脈共有の値オブジェクト
+└── contracts/{message}/   プロセス間のメッセージの契約
+{context}/
+├── {aggregate}/           戦術的 DDD の集約
+│   ├── domain/            集約、状態の型、値オブジェクト、イベント、永続化ポート、エラー
+│   ├── repository/        永続化ポートの実装
+│   ├── usecase/command/   command の usecase
+│   ├── usecase/query/     読み取りのポートと読み取りモデルと query の usecase
+│   ├── query/             読み取りのポートの実装
+│   └── handler/           入口（RPC、受信境界、巡回）
+├── {procedure}/           単純なパターンの手順
+│   ├── usecase/           手順と、手順が所有するポート
+│   ├── repository/        リポジトリ相当の口の実装
+│   └── handler/           入口
+└── orchestration/usecase/command/  資料が同じ時点で二つ以上の集約へ書くと定めた command
 ```
 
-aliasは呼び手の曖昧さを解消するだけで、依存方向を変えない。package名を`common`や`shared`へ変えて責務を隠さない。
+## 共有の置き場
 
-## 判断例
+**文脈共有の値オブジェクト**は、`internal/shared/vo` に置く。どの値が文脈共有かは、ドメインモデルの資料がクラス図の `<<値オブジェクト・文脈共有>>` の印で示す。印の付いた値を一つの集約の `domain` に置くと、別の集約や別のプロセスが、その集約の `domain` を import することになるからである。印の無い値オブジェクトは、その集約の `domain` に置く。識別子が多いなら、`shared/vo/id` のように分けてよい。
 
-典型例: 空き枠一覧の型とinterfaceは`usecase/query`、DBから組み立てる型は`query`へ置く。実装から契約へimportする。
+**プロセス間のメッセージの契約**（Outbox の要求、配信のメッセージ）は、`internal/contracts/{message}` に置く。送る側のプロセスと受ける側のプロセスが、同じ契約の型を import する。
 
-似て非なる例: Commandのために重複予約を読むinterfaceも読み取り契約なので`usecase/query`に置ける。Commandは契約をimportし、実装をimportしない。
+**横断的関心事**は、`internal/crosscutting` に置く。業務の概念を import しない。
 
-反例: 循環を避けるため同じinterfaceをCommand側とQuery実装側へ二重定義する。契約の所有者が二つになるため拒否する。
+禁じるのは、責務を定めない置き場である。`shared/vo` は文脈共有の値オブジェクトだけを、`contracts` はプロセス間のメッセージだけを持つ。`common`、`util`、`helpers` のように、何でも入る置き場は作らない。新しい値オブジェクトを作る前に、`shared/vo` と集約の `domain` に同じ意味の型が無いかを探す。
 
-境界例: 一つのCommandが二集約のリポジトリへ書くなら横断調整へ置く。片方を読むだけなら引き金となる集約のCommandに留める。
+## テスト支援
+
+Builder は、それが組み立てる実装の直下の `builders/` に置く（`shared/vo/builders`、`{aggregate}/domain/builders`、`{aggregate}/repository/builders`）。mock は、interface を所有する package の直下の `mock/` に置く。本番のコードは、`builders` と `mock` を import しない。
+
+# import の向き
+
+import は、外側から内側へだけ向かう。
+
+`domain` は、Go の標準ライブラリ、`crosscutting/errors`、`shared/vo` だけを import する。
+
+`repository` は、`domain`、`shared/vo`、`crosscutting`（rdb、tx、errors、clock、idgen）、DB の生成型を import する。usecase、query、handler を import しない。
+
+`usecase/command` は、`domain`（ポートと型）、`shared/vo`、`crosscutting`（tx、errors、idgen）、外部の境界のポート（usecase/command が所有する）を import する。**`usecase/query` と `query` を import しない。** command は読み取りの口を呼ばないからである。判断の材料は、`domain` の Find が集める。
+
+`usecase/query` は、読み取りのポートと読み取りモデルを所有し、`shared/vo` と `domain` の値オブジェクトだけを使う。`query` の実装を import しない。
+
+`query` は、`usecase/query` の契約、`shared/vo`、`domain` の値オブジェクト、`crosscutting`（rdb、errors）、DB の生成型を import する。集約を復元せず、操作しない。
+
+`handler` は、`usecase/command` と `usecase/query`、転送の型を import する。リポジトリと query の実装は、組み立ての場所（`run`）だけが import する。巡回のように、一つの入口が query の usecase で候補を選び、一件ごとに command の usecase を呼ぶのはよい。ループと失敗の閉じ込めは、入口が持つ。
+
+`{procedure}/usecase` は、自分が所有するポート（リポジトリ相当の口、外部の副作用の口）と、`contracts`、`shared/vo`、`crosscutting`（tx、errors）を import する。DB の生成型と pgx を import しない。`{procedure}/repository` がポートを実装する。
+
+# package の名前
+
+directory の末尾と package の名前を一致させる。`domain`、`repository`、`command`、`query` が一つのファイルで衝突したら、呼び手の import の別名で解く（`loandomain`、`loanquery`）。別名は曖昧さを解くだけで、依存の向きを変えない。
+
+# 判断の例
+
+典型例：利用者番号と資料番号は、クラス図で文脈共有の印が付いているので `internal/shared/vo` に、返却期限と貸出状況は印が無いので `lending/loan/domain` に置く。
+
+似て非なる例：延滞の通知の要求は、貸出の集約の `domain` の値ではなく、延滞にするプロセスと通知を発行するプロセスの間のメッセージなので、`internal/contracts/overduenotice` に置く。
+
+反例：command の usecase が、候補の一覧を読むために `usecase/query` を import する。材料は Find が集め、一覧を選んで一件ずつ呼ぶのは入口の仕事なので、拒否する。
+
+境界例：資料が「貸出と在庫を同じ時点で更新する」と定めたときだけ、その command を `orchestration/usecase/command` に置く。資料が時間差を許すなら、発生元の集約の command が Outbox の要求を同じトランザクションで記録し、別の手順が処理する。
