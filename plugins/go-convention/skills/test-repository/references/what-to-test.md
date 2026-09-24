@@ -1,91 +1,27 @@
 # 何をテストするか
 
-**永続化層のテストとは、実 DB の上で「データモデル資料の Before から After へ、資料どおりに行が変わる」ことを、資料に登場する全テーブルの全行で確かめるものである。** リポジトリは「復元 → 実物の集約の操作 → 保存」で駆動し、query service は「Before を投入 → 読み取り → DTO を突き合わせ」で駆動する。DB は dockertest で起動した実 PostgreSQL で、mock・stub・in-memory の代替を使わない。
+永続化層のテストは、dockertest で起動した実物の PostgreSQL の上で、リポジトリ、Query の実装、単純なパターンのリポジトリ相当の口を確かめる。実 DB の基盤、テストデータ、差し替えてよい境界は、apply-go-test-convention に従う。
 
-これは、**業務ルールのテストではない**（集約と値オブジェクトが何を許し何を拒むかは、ドメインのテストが実 DB 無しで確かめる）。**SQL の文言のテストでもない**（query は sqlc が型で検査し、正しさは行の結果で観測する）。**usecase のテストでもない**（tx の境界・複数集約の協調・入力の解決は usecase のテストの関心）。
+# 主に担う BDD
 
-## 1. する／しない
+永続化層のテストが主に担うのは、`Then:` が、記録される行の形、DB の制約が守る拒否、同時に起きたときの結果、読み取りモデルの中身を観測する BDD である。データモデルの資料の BDD は、ほとんどがこれに当たる。業務知識の BDD のうち、DB の制約が守るもの（本がほかの利用者に貸出中、同じ本を二人が同時に借りる）も、永続化層のテストが主に担う。
 
-| する | しない |
-|---|---|
-| データモデル資料の BDD ごとの状態変化を、**資料に登場する全テーブルの全行**で突き合わせる。0 件のテーブルも空であることを確かめる。1 テーブルでも欠けたら規約違反。これは絶対の規則で、例外を置かない | 集約が拒むシナリオ（`Confirm` が期限到来で拒む、`Cancel` が他人を拒む）。ドメインのテストの責務。ファイル末尾のコメントに BDD ID と理由を列挙する |
-| 復元と保存の往復。保存する集約は `FindByID` で復元した実物から作るので、`Apply*` のケースが毎回 `FindByID` も通す。`FindByID` 単独は復元した集約の値と NotFound を見る | 業務ルール・境界値（期限の同時刻、隣接の判定、資格の停止期間）。値オブジェクトと集約のテストが担う |
-| DB 制約違反がドメインの sentinel に翻訳されること（排他制約 → `reservation.ErrOverlappingSlot`）。集約の内側では確かめられない不変条件は、ここでしか検証できない | SQL の文言、query の名前、生成コードの形 |
-| 楽観ロック競合（`rdb.ErrConflict`）。同じ Before から 2 本の tx を並走させ、後から保存した側が拒まれること | marshaller の単体（`{元}To{先}` は非公開。復元 → 保存の往復で観測する） |
-| 同時実行。資料の「並行実行で必要な保証」を、同じ Before から 2 本を goroutine で並走させて一方だけ成立することで確かめる | ログ、リトライ、接続の再試行 |
-| NotFound（`rdb.ErrNotFound`）と、ctx に tx が無いときの `rdb.ErrNoTransaction` | 通常型のテーブルに無い列、資料に無いテーブル |
+集約が拒むもの（上限、延滞、返却済み、返却期限前）は、ドメインのテストが主に担う。データモデルの資料に「記録されない」BDD として載っていても、拒むのがドメインなら、ここでは資料の ID を写さない。
 
-「する」列に無いものは書かない。迷ったら「書かない」に倒し、末尾コメントに理由を残す。
+# リポジトリ
 
-「資料に登場する全テーブル」は資料の 8 表に、リポジトリの実装が置く資料に無いテーブルを足したものである。題材では無断不利用を残す仮定の 9 表目 `reservation_no_show_recorded_events`（資料は無断不利用を範囲外にしている）がそれで、実装にあるなら全ケースの `seed{Table}` / `want{Table}` に数え、`ApplyNoShowRecorded` のケースは 9 表全部を突き合わせる。
+資料の BDD の When を、実物の集約のコマンドと実物のリポジトリの `Apply` で起こし、資料の After と突き合わせる（[突き合わせる範囲](comparing.md)）。保存するイベントは、Find で得た実物の集約のコマンドから得る。イベントを直接組み立てない。リポジトリを通らない書き込みを、テストの対象にしないためである。
 
-## 2. When の駆動: 復元 → 実物の操作 → 保存
+資料に無いケースとして、次を足す。Find が保存された状態ごとに正しい状態の型を返すこと。初期状態の型を返す Find が、集約の外の事実（貸出状況）を正しく読むこと。行が無ければ「存在しない」、保存値が壊れていれば「回復不能」の具体エラーになること。ctx にトランザクションが無ければ「分類不能」になること。
 
-リポジトリのテストの When は、usecase と同じ手順を同じ tx の中で行う。イベントを手で組み立てない（イベントの型は非公開フィールドで塞がれていて、組み立てられない）。
+# 同時に起きたとき
 
-| 手順 | イベント型の集約（題材の予約） | 通常型の集約 |
-|---|---|---|
-| 1. Before を投入 | `rdbtest.Reset` → `rdbtest.Seed{Table}` × 資料の全テーブル | 同じ |
-| 2. 復元 | `repo.FindByID(ctx, id)` → `reservation.AsTentative(found)` | `repo.FindByID` → `waitlist.AsWaiting` |
-| 3. 実物の操作 | `tentative.Confirm(at, by)` → `(ConfirmResult, error)` | `waiting.Promote(at)` |
-| 4. 保存 | `repo.ApplyConfirmed(ctx, res.Event)` | `repo.Update(ctx, res.Next)` |
-| 5. After を突き合わせ | `rdbtest.Read{Table}` × 全テーブルを `assert.Equal` | 同じ |
+資料の「同時に起きたとき」の BDD（同じ本を二人が同時に借りる、延滞にするのと返却が重なる、同じ要求を二つの送り手が同時に回収する）は、二つの操作を、バリアで順序を固定して起こす（[同時に起きたとき](concurrency.md)）。
 
-- 生成のシナリオ（資料 BDD-001 仮押さえ）は復元の代わりに実物の生成 `reservation.Hold(...)` から始め、`ApplyHeld(ctx, res.Event)`（通常型は `Create(ctx, res.Next)`）で保存する
-- 2 〜 4 は `rdbtest.Run(ctx, t, pool, fn)` の中で行う。usecase が張る tx の代わりで、`fn` が error を返せば rollback される。拒まれたケースの After が Before と同じであることは、この rollback を含めて観測する
-- 時刻と ID は表の値をそのまま操作に渡す。`time.Now()` を呼ばない。After の `created_at` / `updated_at` / `occurred_at` は資料の値と一致する
-- `Restore*` を直接呼んで保存対象を作らない。復元経路が `FindByID` だけなら、往復が毎ケースで検証される
+# Query の実装
 
-## 3. 同時実行と楽観ロック競合
+読み取りの BDD は、Before を持ち主の書き込み経路で作り、読み取りのポートを呼び、返った読み取りモデルを `assert.Equal` で突き合わせる。書き込みが無いので、テーブルの突き合わせは要らない。対象にある観点（絞り込み、並び、ページ、空、壊れた一件を除くこと）を確かめる。
 
-資料の「並行実行で必要な保証」と「同時仮押さえ」は、**同じ Before から 2 本の tx を並走させる**ことで写す。どちらも表の When を 2 件にし、ループ本体で goroutine 2 本を `sync.WaitGroup.Go` で走らせる。書き方は [table-shape.md](table-shape.md) §4。
+# 単純なパターンの口
 
-| 検証すること | 並走させる 2 本 | 後から保存する側が受ける error | After |
-|---|---|---|---|
-| 同じ空き枠への同時仮押さえ（資料 BDD-005） | `Hold` → `ApplyHeld` × 2（予約者が違う） | `reservation.ErrOverlappingSlot`（排他制約の翻訳） | 先に成立した 1 件のリソース系 3 行とイベント系 2 行だけ |
-| 同じ集約への同時更新（楽観ロック競合） | `FindByID` → `Confirm` → `ApplyConfirmed` × 2 | `rdb.ErrConflict`（楽観ロック付き UPDATE の 0 行） | 先に成立した 1 本の After |
-
-先に成立する側を先頭に固定する（先頭が保存まで進んで tx を開いたまま待ち、残りが保存に入る直前で揃ってから commit する）。成立する側が実行のたびに変わると After が決まらず、表に書けない。
-
-## 4. DB 制約違反と NotFound
-
-| ケース | Before | When | `wantErr` | After |
-|---|---|---|---|---|
-| 確定予約と重なる仮押さえ（資料 BDD-010） | 確定予約の占有 | 重なる利用枠の `Hold` → `ApplyHeld` | `reservation.ErrOverlappingSlot` | Before と同じ（`want{Table}` に `seed{Table}` と同じ行を書く） |
-| 隣接する仮押さえ（資料 BDD-008） | 確定予約の占有 | 境界で接する利用枠の `Hold` → `ApplyHeld` | nil | 2 件目の占有が足される |
-| 無い予約の取得 | 空 | `FindByID` | `rdb.ErrNotFound` | 空 |
-| tx の外で呼ぶ | 任意 | `rdbtest.Run` を通さず `repo.FindByID(ctx, id)` | `rdb.ErrNoTransaction` | Before と同じ |
-
-集約は「重なる利用枠に有効な予約が無いこと」を内側で確かめられない（資料「集約の境界」）。だから重なりは DB の排他制約が守り、その翻訳を確かめるのはこの層である。集約が拒む条件（資格・期限・本人）はこの層に届かないので、書かない。
-
-## 5. 資料の BDD の割り振り
-
-データモデル資料の「シナリオと記録の対応」の表が、そのまま割り振り表になる。
-
-| 資料の行 | 割り振り |
-|---|---|
-| どれかのテーブルに「追加」「更新」「削除」がある | その変化を書くメソッドのテスト関数（`ApplyHeld` / `ApplyConfirmed` / `ApplyCancelled` / `ApplyExpired`）に、資料の ID をそのまま `id` にして置く |
-| 全テーブル「変更なし」で、拒む主体が集約（事前条件・本人・資格） | 書かない。ドメインのテストが主に担う |
-| 全テーブル「変更なし」で、拒む主体が DB 制約（一意・排他） | 書く。`wantErr` にドメインの sentinel、`want{Table}` に Before と同じ行 |
-| 「成立した一件だけ」（同時実行） | 書く。When を 2 件にして並走させる |
-
-題材の 10 件は次のように割り振られる。
-
-| ID | 見出し | 置き場 | 理由 |
-|---|---|---|---|
-| BDD-001 | 空き枠を仮押さえする | `TestReservationRepository_ApplyHeld` | 生成 → `ApplyHeld` |
-| BDD-002 | 仮押さえ期限と同時刻の確定を期限切れとして記録する | 末尾コメント | 確定は `Confirm` が期限到来で拒み、リポジトリに届かない。期限切れの記録は BDD-009 で検証する |
-| BDD-003 | 仮押さえ予約を確定する | `TestReservationRepository_ApplyConfirmed` | 復元 → `Confirm` → `ApplyConfirmed` |
-| BDD-004 | 確定予約を取り消す | `TestReservationRepository_ApplyCancelled` | 復元 → `AsActive` → `Cancel` → `ApplyCancelled` |
-| BDD-005 | 同じ空き時間への同時仮押さえは一方だけ成立する | `TestReservationRepository_ApplyHeld` | 2 本並走。排他制約の翻訳 |
-| BDD-006 | 仮押さえ予約を取り消す | `TestReservationRepository_ApplyCancelled` | 復元 → `AsActive` → `Cancel` → `ApplyCancelled` |
-| BDD-007 | 第三者による確定予約の取消を拒む | 末尾コメント | `Cancel` が本人でない呼び手を拒み、リポジトリに届かない |
-| BDD-008 | 確定予約に隣接する利用枠を仮押さえする | `TestReservationRepository_ApplyHeld` | 排他制約が隣接を許すことは DB でしか確かめられない |
-| BDD-009 | 未確定のまま仮押さえ期限が到来する | `TestReservationRepository_ApplyExpired` | 復元 → `Expire` → `ApplyExpired` |
-| BDD-010 | 確定予約と重なる利用枠の仮押さえを拒む | `TestReservationRepository_ApplyHeld` | 排他制約の翻訳。After は Before と同じ |
-
-資料に無いケース（楽観ロック競合、`FindByID` の各状態の復元、NotFound、tx の外、無断不利用の記録 `ApplyNoShowRecorded`）は生成した id で足す。同じ BDD 番号がドメインのテストのディレクトリにもある。`id` の一意はディレクトリの中で見る。
-
-## 6. query service
-
-query service は書き込みが無いので、全テーブルの突き合わせは要らない。Before を投入し、読み取りメソッドを呼び、返った DTO を `assert.Equal` で突き合わせる。観点は [query-service-test.md](query-service-test.md)。
+手順の口（回収、成功、失敗の記録）は、資料の BDD（リースが切れた要求は再び回収される、送り先の無い要求は打ち切られる）を、口のメソッドで起こし、After と突き合わせる。時刻は、差し替えた Clock で決める。
