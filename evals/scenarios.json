@@ -22,7 +22,7 @@
         },
         {
           "id": "signature",
-          "meaning": "返り値を2つ以下にし、naked returnとelseの入れ子を消し、package名utilとGet接頭辞を直す。I/Oをせず使われないctxはbasics.md §7に従い第一引数へ移さず引数ごと外す（呼ぶ側のinterfaceが要求する場合だけ第一引数に置く）"
+          "meaning": "返り値を2つ以下にし、naked returnとelseの入れ子を消し、package名utilとGet接頭辞を直す。I/Oをせず使われないctxはbasics.md の「ctx は、I/O をする関数の第一引数にだけ置く」に従い第一引数へ移さず引数ごと外す（呼ぶ側のinterfaceが要求する場合だけ第一引数に置く）。件数上限は業務の概念なので、intのまま返さず値オブジェクト（または名前付きの型）で返す"
         },
         {
           "id": "truthful",
