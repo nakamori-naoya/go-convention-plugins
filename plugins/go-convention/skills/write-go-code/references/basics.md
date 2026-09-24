@@ -14,8 +14,8 @@
 // 貸出期間は業務の規則なので、名前のある定数にする。関数は引数から結果を作るだけにする。
 const loanPeriodDays = 14
 
-func DueFrom(lentOn LentOn) Due {
-	return Due{on: lentOn.date().AddDate(0, 0, loanPeriodDays)}
+func DueFrom(lentAt LentAt) Due {
+	return Due{day: lentAt.libraryDay().AddDays(loanPeriodDays)}
 }
 ```
 
@@ -59,14 +59,14 @@ func NewVersion(n int) (Version, error) {
 拒む条件を先に並べて `return` し、本筋を字下げ無しで最後に書く。`else` の中に本筋を置かない。
 
 ```go
-func (p PendingLoan) Borrow(id LoanID, lentOn LentOn) (BorrowResult, error) {
+func (p PendingLoan) Borrow(id LoanID, lentAt LentAt) (BorrowResult, error) {
 	if p.standing.HasOverdue() {
 		return BorrowResult{}, ErrUserHasOverdue
 	}
 	if p.standing.ReachedLimit() {
 		return BorrowResult{}, ErrLoanLimitReached
 	}
-	next := OnLoan{id: id, user: p.user, book: p.book, lentOn: lentOn, due: DueFrom(lentOn), version: FirstVersion}
+	next := OnLoan{id: id, user: p.user, book: p.book, lentAt: lentAt, due: DueFrom(lentAt), version: FirstVersion}
 	return BorrowResult{Next: next, Event: Lent{loan: next}}, nil
 }
 ```
