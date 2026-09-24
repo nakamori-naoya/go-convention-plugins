@@ -29,7 +29,6 @@ description: 集約・エンティティ・値オブジェクトのテストを�
 | 1 | 何をテストするか | VO の生成の条件・判定と計算・New 再生成、集約の生成関数と操作の事前条件・事後条件・拒む理由・発するイベント、`(Result, bool)` の両側、絞り込み関数の状態違い、不変条件。getter・永続化・他集約の判断・usecase の手順・資料に無い内部・同時実行・ログはテストしない | [what-to-test.md](references/what-to-test.md) |
 | 2 | 資料からの割り振り | 「BDDとの対応」表の要素×操作がテスト関数を決める。生成 → `TestHold`、許される遷移 → `TestTentative_Confirm`、状態違いの拒否 → `TestAsTentative`、VO の操作 → `TestTimeSlot_Overlaps`。1 BDD 2 操作は資料の並び順。別の集約・同時実行・外の判断は末尾コメント | [mapping-from-doc.md](references/mapping-from-doc.md) |
 | 3 | テーブルの形 | Given は `Restore*` / `New*` の引数名、When は操作の引数（`at` / `by`）、Then は `wantNext`（`Restore*` で組む）・`wantEvent`（getter の射影）・`wantErr`（sentinel）・`wantOK`。`t.Parallel()` あり。ケース間依存なし | [table-shape.md](references/table-shape.md) |
-| 4 | 題材の完全な例 | 貸会議室予約の `reservation_test.go` 相当。`TestHold` / `TestTentative_Confirm` / `TestAsTentative` / `TestTimeSlot_Overlaps` と末尾コメント | [examples.md](references/examples.md) |
 
 ### 何をテストする／しない
 
