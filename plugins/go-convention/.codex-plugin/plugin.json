@@ -1,7 +1,7 @@
 {
   "name": "go-convention",
   "version": "3.1.0",
-  "description": "Go 1.27 のコーディング・ドメインモデル・永続化・usecase・handler・エラー・ログ・テストの規約と、層ごとのTDD入口を配布する",
+  "description": "Go 1.27 のコーディング・ドメインモデル・永続化・usecase・handler・エラー・ログ・テストの規約と、TDD の一単位を仕上げる skill を配布する",
   "author": {
     "name": "NaoyaNakamori"
   },
@@ -25,7 +25,7 @@
   "interface": {
     "displayName": "Go Convention",
     "shortDescription": "Go の実装とテストを共通規約で書く",
-    "longDescription": "Go 1.27 を前提に、コーディング規約、typestate の集約と完全コンストラクタの値オブジェクト、sqlc + pgx のリポジトリと query service、usecase、Connect-RPC の handler、エラー、ログ、そして BDD 資料の ID をそのまま使うテストの規約を、新規・既存のコードへ適用します。",
+    "longDescription": "Go 1.27 を前提に、コーディング規約、状態ごとに型を分けた集約と生成の時点で検証する値オブジェクト、sqlc と pgx のリポジトリと query service、usecase、Connect-RPC の handler、エラー、ログ、そして BDD 資料の ID をそのまま使うテストの規約を、新規・既存のコードへ適用します。",
     "developerName": "NaoyaNakamori",
     "category": "Developer Tools",
     "capabilities": [
@@ -33,7 +33,7 @@
     ],
     "defaultPrompt": [
       "この集約を Go で実装して。",
-      "この集約のテストを domain-model 資料の BDD から書いて。",
+      "この集約のテストを業務知識の資料の BDD から書いて。",
       "このリポジトリのテストをデータモデル資料から書いて。"
     ]
   },

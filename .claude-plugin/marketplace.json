@@ -8,7 +8,7 @@
     {
       "name": "go-convention",
       "source": "./plugins/go-convention",
-      "description": "Go package 配置・コーディング・ドメインモデル・永続化・usecase・handler・エラー・ログ・テストの14の独立した規約入口を提供する",
+      "description": "Go の package 配置、コーディング、ドメインモデル、永続化、usecase、handler、エラー、ログ、テストの14の規約と、TDD の一単位を仕上げる1つの skill を提供する",
       "version": "3.1.0"
     }
   ]
