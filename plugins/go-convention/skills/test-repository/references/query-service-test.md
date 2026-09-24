@@ -1,6 +1,6 @@
 # query service のテスト
 
-**query service のテストは、Before を投入し、読み取りメソッドを呼び、返った DTO を `assert.Equal` で突き合わせる。** 書き込みが無いので、全テーブルの突き合わせは要らない。実 DB は同じ dockertest で、package `query` に `main_test.go` を置く（[dockertest-and-testmain.md](dockertest-and-testmain.md)）。
+**query service のテストは、Before を投入し、読み取りメソッドを呼び、返った DTO を `assert.Equal` で突き合わせる。** 書き込みが無いので、全テーブルの突き合わせは要らない。実 DB は同じ dockertest で、package `query` に `main_test.go` を置く（apply-go-test-convention の実 DB の規則）。
 
 これは、**リポジトリのテストではない**（集約を復元しない。`FindByID` の代わりに query service を使わない）。**usecase のテストでもない**（ページングの既定値や入力の解決は usecase の関心。query service には解決済みの値を渡す）。
 

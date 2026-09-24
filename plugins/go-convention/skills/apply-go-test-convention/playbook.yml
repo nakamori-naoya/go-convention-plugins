@@ -9,7 +9,10 @@ requires: []
 steps:
   - id: choose-target
     agent_work: invoking_agent
-    purpose: "対象を1つに決める"
+    purpose: "対象を一つに決める"
+  - id: decide-owned-bdd
+    agent_work: invoking_agent
+    purpose: "写す BDD と、主に担うかを決める"
   - id: choose-table-shape
     agent_work: invoking_agent
     purpose: "テーブルの型を決める"
@@ -18,7 +21,7 @@ steps:
     purpose: "ケースを書く"
   - id: write-single-loop
     agent_work: invoking_agent
-    purpose: "ループ本体を1回書く"
+    purpose: "ループ本体を一回書く"
   - id: run-structural-checks
     agent_work: invoking_agent
     purpose: "機械検査を通す"

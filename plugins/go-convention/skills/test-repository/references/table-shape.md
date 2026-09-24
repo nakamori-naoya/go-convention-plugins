@@ -55,7 +55,7 @@
 | `Seed` と `Read` は資料の全テーブル分を毎回並べる。まとめる関数を作らない | 1 テーブルの抜けが目で見える。まとめると抜けが関数の中に隠れる |
 | error は `require.ErrorIs` / `require.NoError`。After の突き合わせは `assert.Equal` | error の不一致は後続の意味が無い。テーブルの不一致は互いに独立で、全部報告させる |
 | `ctx` は `t.Context()`。フィールドにしない | キャンセルの持ち主をサブテストにする |
-| ループ直前のコメントで共有 DB を名指しし、`t.Parallel()` を書かない | [dockertest-and-testmain.md](dockertest-and-testmain.md) §2 |
+| ループ直前のコメントで共有 DB を名指しし、`t.Parallel()` を書かない | apply-go-test-convention の実 DB の規則 |
 
 ## 4. 同時実行の書き方
 
@@ -706,8 +706,4 @@ Then: 予約が見つからないと拒まれる`,
 		})
 	}
 }
-
-// テストしない BDD:
-// BDD-002 期限と同時刻の確定は集約（Confirm の事前条件）が拒み、リポジトリに届かない。期限切れの記録は BDD-009 で検証する
-// BDD-007 第三者による取消は集約（Cancel の事前条件）が拒み、リポジトリに届かない
 ```
