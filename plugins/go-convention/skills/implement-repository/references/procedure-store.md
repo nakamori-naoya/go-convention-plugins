@@ -77,13 +77,37 @@ func (s *OverdueNoticeRequests) Claim(ctx context.Context, relay contract.RelayI
 	return contract.NewClaim(claimID, c, relay), nil
 }
 
+// RecordSucceeded は、送ったことを記録する。要求の行をロックし、失敗が先にあれば書かずに終える。
+func (s *OverdueNoticeRequests) RecordSucceeded(ctx context.Context, claim contract.Claim) error {
+	q, err := s.queries(ctx)
+	if err != nil {
+		return err
+	}
+	req := rdb.IDColumn(claim.RequestID())
+	// 物理設計の「成功と失敗はどちらか一つ」。要求の行を SELECT … FOR UPDATE でロックしてから確かめる。
+	if err := q.LockOverdueNoticeRequest(ctx, req); err != nil {
+		return rdb.Translate(ctx, err, nil)
+	}
+	failed, err := q.ExistsOverdueNoticeFailedEvent(ctx, req)
+	if err != nil {
+		return rdb.Translate(ctx, err, nil)
+	}
+	if failed {
+		return nil
+	}
+	if err := q.InsertOverdueNoticeSucceededEvent(ctx, succeededParams(claim, s.clock.Now())); err != nil {
+		return rdb.Translate(ctx, err, claimConstraints)
+	}
+	return nil
+}
+
 // RecordFailed は、要求を打ち切った失敗を記録する。要求の行をロックし、成功が先にあれば書かずに終える。
 func (s *OverdueNoticeRequests) RecordFailed(ctx context.Context, req contract.RequestID, reason contract.FailureReason) error {
 	q, err := s.queries(ctx)
 	if err != nil {
 		return err
 	}
-	// 物理設計の「成功と失敗はどちらか一つ」。要求の行を FOR UPDATE でロックしてから確かめる。
+	// 物理設計の「成功と失敗はどちらか一つ」。要求の行を SELECT … FOR UPDATE でロックしてから確かめる。
 	if err := q.LockOverdueNoticeRequest(ctx, rdb.IDColumn(req)); err != nil {
 		return rdb.Translate(ctx, err, nil)
 	}
@@ -100,5 +124,7 @@ func (s *OverdueNoticeRequests) RecordFailed(ctx context.Context, req contract.R
 	return nil
 }
 ```
+
+`LockOverdueNoticeRequest` は、物理設計のとおり `SELECT … FOR UPDATE` で要求の行を押さえる SQL である。二つの記録が同時に走っても、後の一方はロックを待ち、先の記録を見てから書かずに終える。
 
 リースの長さ（`claimLease`）は、データモデルの資料が決めた値を名前のある定数にする。打ち切るまでの回収の回数は、比較する手順の側に同じ形で置く。資料が仮置きした値なら、その仮置きをコメントに書く。
