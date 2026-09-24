@@ -34,7 +34,7 @@
 | 回復不能 | ERROR |
 | 分類不能 | ERROR |
 
-表は、ログの横断的関心事の package に一つだけ置き、公開する関数は `Level(err error) slog.Level` 一つにする。表に無い分類に当たったときは、「分類不能」として扱う（ERROR になる）。
+表は、ログの横断的関心事の package に一つだけ置き、公開する関数は `Level(err error) slog.Level` 一つにする。表に無い分類に当たったときは、「分類不能」の行を使う（ERROR になる）。これが「丸めない」の例外として許される理由は、handle-errors の境界の表と同じである。
 
 ```go
 var levelTable = map[error]slog.Level{
