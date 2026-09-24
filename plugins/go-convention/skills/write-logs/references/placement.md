@@ -91,47 +91,33 @@ interceptor の並びと組み立ては implement-handler が決める。
 
 メッセージを受けて手順を呼ぶ受信境界は、一件のメッセージにつき一行を記録する。処理の表の「再処理で通りうるか」で、再処理させる（受け取りを確定しない）か、確定して終えるかを決め、その判断を記録に残す。黙って捨てない。
 
-## ワーカーの巡回
+## ワーカーの巡回と、一件ずつ処理する手順
 
-巡回は、その回の判断に使う時刻を最初に一度だけ取り、候補を選ぶ query を呼び、一件ごとに command を呼ぶ。ループと失敗の閉じ込めは、巡回（境界）が持つ。
+ワーカーの巡回のループを誰が持つかは、巡回の相手で決まる（implement-handler が定める）。相手が単純なパターンの手順なら、ループと失敗の閉じ込めは手順が持ち、巡回は一回の巡回で手順を一度呼ぶだけにする。記録も、飲み込む場所である手順が行う。次の例は、延滞の通知の Outbox の要求を一件ずつ回収して送る手順のループである。
 
 ```go
-func (w *OverdueChecker) runOnce(ctx context.Context) error {
-	// 巡回の判断に使う時刻。Clock から一度だけ取り、資料の「延滞にする」の引数の値オブジェクトにする。
-	at := w.checkedAt()
-	candidates, err := w.listCandidates.Execute(ctx, at)
-	if err != nil {
-		return err
+for _, c := range candidates {
+	err := u.publishOne(ctx, c)
+	if err == nil {
+		continue
 	}
-	marked := 0
-	for _, loan := range candidates {
-		err := w.markOverdue.Execute(ctx, command.MarkOverdueInput{Loan: loan, At: at})
-		if err == nil {
-			marked++
-			continue
-		}
-		handling, handlingFound := errors.HandlingOf(err)
-		level, levelFound := log.Level(err)
-		if !handlingFound || !levelFound {
-			return err // 表の更新漏れ。巡回を打ち切り、見張りが分類不能として記録する
-		}
-		if handling.Spreads {
-			return err
-		}
-		w.logger.LogAttrs(ctx, level, "貸出を延滞にできなかったため次へ進む",
-			slog.String("loan_id", loan.Value()),
-			slog.Any("err", err),
-		)
+	handling, handlingFound := errors.HandlingOf(err)
+	level, levelFound := log.Level(err)
+	if !handlingFound || !levelFound || handling.Spreads {
+		return err // 表の更新漏れか、全体に及ぶ失敗。残りを試さずに返し、見張りが記録する
 	}
-	w.logger.LogAttrs(ctx, slog.LevelInfo, "延滞の確認の巡回を終えた",
-		slog.Int("candidates", len(candidates)),
-		slog.Int("overdue", marked),
+	// 一件に閉じた失敗は飲み込むので、ここで一度だけ記録する。
+	u.logger.LogAttrs(ctx, level, "延滞の通知の一件を送れなかったため次へ進む",
+		slog.String("request_id", c.RequestID().Value()),
+		slog.Bool("reprocessable", handling.Reprocessable),
+		slog.Any("err", err),
 	)
-	return nil
 }
 ```
 
-候補を選べなかった失敗と、全体に及ぶ失敗は、返す。返したエラーは、巡回を動かすもの（下の常駐の見張り）が記録する。一件に閉じた失敗は、飲み込んで記録する。
+候補を選べなかった失敗と、全体に及ぶ失敗は、返す。返したエラーは、巡回を動かすもの（下の常駐の見張り）が記録する。一件に閉じた失敗は、飲み込んで記録する。巡回の側でも同じ失敗を記録すると、一つの失敗が二行になる。
+
+相手が戦術的 DDD の command なら、巡回が query で候補を選び、一件ごとに command を呼び、上と同じ形でループと記録を持つ。
 
 ## 常駐の見張り
 
