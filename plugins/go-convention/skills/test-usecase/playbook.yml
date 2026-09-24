@@ -7,21 +7,15 @@ instructions:
     directive: 同じagentがstepsを上から順に実行し、失敗した工程を成功扱いせず停止する
 requires: []
 steps:
-  - id: classify-five-concerns
+  - id: decide-target-and-viewpoints
     agent_work: invoking_agent
-    purpose: "usecase の `Execute` を読み、5 観点に分ける"
-  - id: decide-cases
+    purpose: "対象と観点を決める"
+  - id: write-table
     agent_work: invoking_agent
-    purpose: "ケースを決める"
-  - id: inspect-test-main
+    purpose: "表を書く"
+  - id: write-loop
     agent_work: invoking_agent
-    purpose: "`main_test.go` を確かめる"
-  - id: write-table-and-loop
-    agent_work: invoking_agent
-    purpose: "表とループ本体を書く"
-  - id: return-missing-test-support
-    agent_work: invoking_agent
-    purpose: "足りないテスト支援を返す"
+    purpose: "ループ本体を書く"
   - id: run-structural-checks
     agent_work: invoking_agent
     purpose: "機械検査を通す"
