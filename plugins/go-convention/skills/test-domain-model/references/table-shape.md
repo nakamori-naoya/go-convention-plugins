@@ -1,113 +1,74 @@
 # テーブルの形
 
-**Given は `Restore*` / `New*` の引数、When は操作の引数、Then は `Next` の値・発したイベントの値・sentinel。** ドメインのテストは資源を持たないので、Given は全部データで書け、`setup func` も操作列も要らない。
+ドメインのテストの Given は、初期状態の型と `Restore*` と `New*` に渡す値、When はコマンドの引数、Then は `Next` の値と `Event` の値と具体エラーである。ドメインのテストは資源を持たないので、Given はすべてデータで書け、`setup` も操作列も要らない。テストの形の共通の規則（識別、表、ループ本体）は apply-go-test-convention に従う。
 
-## 1. 共通規則の要約（この規約で使う分だけ）
-
-| 規則 | 内容 |
-|---|---|
-| 単位 | 対象（1 つの生成関数・1 つのメソッド・1 つの絞り込み関数）につきテスト関数は 1 つ。`Test{型}_{メソッド}` / `Test{関数}`。状態型ごとに同名メソッドがあれば別のテスト関数 |
-| package | `{pkg}_test`（外部テストパッケージ）。非公開には触れない |
-| テーブル | 無名 struct のスライス。フィールドは識別 → Given → When → Then の順。ケースは複数行で書く |
-| 識別 | `id` / `name` / `description` を必ずこの 3 つ・この順・各 1 行始まりで。`id` はディレクトリ内で一意・不変。資料にあるケースは資料の ID・見出し文・gherkin ブロックをそのまま写す |
-| Given / When | 引数名そのままのフィールド。`in` / `args` の袋に包まない |
-| Then | `want` / `want{何}` / `wantErr error`（sentinel）/ `wantOK bool`。`expected` / `errMsg` / `wantErr bool` は使わない |
-| ループ本体 | `t.Run(tt.id+" "+tt.name, ...)`。実行と検証を 1 回。ケースを選り分ける分岐を書かない |
-| `require` / `assert` | 前提と、失敗したら後続が無意味になるもの（`NoError` / `ErrorIs`）は `require`。独立した期待は `assert` |
-| 並列 | `t.Parallel()` をテスト関数の先頭とサブテストの先頭の両方に置く。メモリ上の不変の値なので共有資源は無い |
-| 依存 | ケース間の依存を作らない。各ケースが自分の値を `Restore*` で組む |
-| ファイルスコープ | `Test*` だけ。ヘルパー関数・パッケージ変数・`TestMain` を置かない |
-
-## 2. 表の前に置くもの
-
-表の前に置いてよいのは、**ケース間で共有する値オブジェクトの生成**と、**イベントの射影 struct の宣言**だけ。関数（ヘルパー・クロージャ）は置かない。
+# 例：`TestPendingLoan_Borrow`
 
 ```go
-func TestTentative_Confirm(t *testing.T) {
+package domain_test
+
+// BDD の資料: docs/lending/業務知識.md
+
+func TestPendingLoan_Borrow(t *testing.T) {
 	t.Parallel()
 
-	// 表で使う値オブジェクト。資料の Given に現れない予約番号と版は全ケース同じ値を使う。
-	reservationID, err := reservation.NewID("R-1")
-	require.NoError(t, err)
-	owner, err := reservation.NewCustomerID("C-1")
-	require.NoError(t, err)
-	other, err := reservation.NewCustomerID("C-2")
-	require.NoError(t, err)
-	room, err := reservation.NewRoomCode("large")
-	require.NoError(t, err)
-	slot, err := reservation.NewTimeSlot(room, time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC), time.Date(2026, 9, 18, 11, 30, 0, 0, time.UTC))
-	require.NoError(t, err)
-	v1, err := reservation.NewVersion(1)
-	require.NoError(t, err)
+	user := vobuilders.NewUserNoBuilder().Build(t)
+	book := vobuilders.NewBookNoBuilder().Build(t)
+	loanID := domainbuilders.NewLoanIDBuilder().Build(t)
+	lentAt := domain.NewLentAt(time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC))
 
-	// confirmed は発したイベントの射影。型は ConfirmResult が決めているので、値だけを getter で並べて比べる。
-	type confirmed struct {
-		reservationID reservation.ID
-		version       int
-		occurredAt    time.Time
-		by            reservation.CustomerID
+	// lent は、発したイベントの射影である。値だけを取り出しの関数で並べて比べる。
+	type lent struct {
+		loanID  domain.LoanID
+		version domain.Version
+		lentAt  domain.LentAt
 	}
-```
 
-| 規則 | 理由 |
-|---|---|
-| VO は `New*` ＋ `require.NoError` で作る。`Restore*` で作れる VO（`RestoreHoldDeadline`）はケースの中で直接組む | 生成の条件は VO のテストが確かめ済み。ここで失敗するなら表以前の問題で、`require` が止める |
-| 資料の Given に現れない復元引数（予約番号・版）は全ケース同じ値 | 表を縦に読んで差分が分かるのは、資料が言及する値だけが変わるときである |
-| 射影 struct はテスト関数の中で宣言する | `{pkg}_test` は 1 つの名前空間。関数の中なら `TestHold` と `TestTentative_Confirm` が別の `held` / `confirmed` を持てる |
-| 時刻は `time.UTC` で書く | VO が UTC に正規化するので、期待値も UTC で書けば `==` と `assert.Equal` がそのまま使える |
-
-## 3. Given
-
-| 対象 | Given のフィールド | 型 |
-|---|---|---|
-| 状態型のメソッド・絞り込み | `Restore*` の引数名（`customer` / `slot` / `deadline` / `noShowAt`）。`id` だけはケースの識別 `id` と衝突するので `reservationID`（表の前で固定するなら省く） | VO の型。`Restore*` はループ本体で 1 回 |
-| 生成関数 | 生成関数の引数のうち、資料の `Given:` に写るもの（`customer` / `slot` / `eligibility`） | VO の型。`eligibility` は `NewEligibility(...)` をケースの中で組む |
-| 絞り込み関数 | 引数名そのまま `r`。`Restore*` で組んだ状態型の値 | 和型 `reservation.Reservation` |
-| VO の `New*` と操作 | `New*` の引数（`room` / `start` / `end`）。組み立てはループ本体 | primitive と他の VO |
-
-```go
-		customer    reservation.CustomerID  // Given: 予約者（RestoreTentative の引数名）
-		slot        reservation.TimeSlot    // Given: 利用枠
-		deadline    reservation.HoldDeadline // Given: 仮押さえ期限
-```
-
-## 4. When
-
-操作の引数名そのまま。題材では `at`（時刻）と `by`（呼び手）。
-
-```go
-		at          time.Time              // When:  確定時刻
-		by          reservation.CustomerID // When:  呼び手
-```
-
-生成関数のように引数が多い対象は、資料の `Given:` に写る引数を Given、`When:` に写る引数（時刻）を When に置く。どちらも引数名そのままで、区別はコメントだけ。
-
-## 5. Then
-
-| 期待 | フィールド | 突き合わせ |
-|---|---|---|
-| 次の状態 | `wantNext reservation.Confirmed`。`Restore*` で Given と同じ値から組み、版だけ `v1.Next()` | `assert.Equal(t, tt.wantNext, got.Next)`。状態型は非公開フィールドの値で比べられる |
-| 発したイベント | `wantEvent confirmed`（射影 struct） | ループ本体で `got.Event` の getter から同じ struct を組み、`assert.Equal` 1 回 |
-| 拒む | `wantErr error`（sentinel） | `require.ErrorIs(t, err, tt.wantErr)` の後に `assert.Zero(t, got)` |
-| 拒まない操作 | `wantOK bool` ＋ `wantNext` ＋ `wantEvent` | `require.Equal(t, tt.wantOK, ok)`。`false` なら `assert.Zero(t, got)` |
-| 絞り込み | `want reservation.Tentative` ＋ `wantErr` | 成功なら `assert.Equal(t, tt.want, got)` |
-| VO の判定 | `want bool` | `assert.Equal(t, tt.want, s.Overlaps(o))` |
-| VO の生成 | `want reservation.TimeSlot`（`New*` を 2 回呼んで比べるなら省く）＋ `wantErr` | `assert.Equal` または `assert.True(t, got == want)` |
-
-イベントの**型**はテストで確かめない。`ConfirmResult = Transition[Confirmed, ConfirmedEvent]` の型引数がコンパイル時に決めている。確かめるのは**値**（予約番号・版・発生時刻・呼び手）で、版は `wantNext` の版と同じ数にする。
-
-## 6. ループ本体
-
-### 遷移 `(Result, error)`
-
-```go
+	tests := []struct {
+		id          string
+		name        string
+		description string
+		standing    domain.Standing // Given: 借りる瞬間の貸出状況
+		wantNext    domain.OnLoan   // Then
+		wantEvent   lent            // Then
+		wantErr     error           // Then: nil なら受ける
+	}{
+		{
+			id:   "BDD-001",
+			name: "延滞の無い利用者が本を借りると貸出中の貸出が生まれる",
+			description: `Given: 利用者番号 U-0001 の利用者は本を1冊も借りておらず、延滞の貸出も無い
+  And: 資料番号 B-1001 の本はどの貸出にも属していない
+When: 利用者 U-0001 が2026年10月1日に本 B-1001 を借りる
+Then: 利用者 U-0001 と本 B-1001 の貸出が貸出中で生まれる
+  And: 貸出日は2026年10月1日、返却期限は2026年10月15日である`,
+			standing:  domain.NewStanding(domainbuilders.NewLentCountBuilder().WithValue(0).Build(t), false),
+			wantNext:  domain.RestoreOnLoan(loanID, user, book, lentAt, domain.DueFrom(lentAt), domain.FirstVersion),
+			wantEvent: lent{loanID: loanID, version: domain.FirstVersion, lentAt: lentAt},
+		},
+		{
+			id:   "BDD-003",
+			name: "5冊借りている利用者は6冊目を借りられない",
+			description: `…資料の gherkin をそのまま…`,
+			standing: domain.NewStanding(domainbuilders.NewLentCountBuilder().WithValue(5).Build(t), false),
+			wantErr:  domain.ErrLoanLimitReached,
+		},
+		{
+			id:   "a71c3e",
+			name: "延滞があり上限にも達している利用者は延滞の理由で拒まれる",
+			description: `Given: 利用者は延滞の貸出を持ち、借りている冊数は5冊である
+When: 利用者が本を借りる
+Then: 延滞の貸出がある利用者が本を借りるとして拒まれる`,
+			standing: domain.NewStanding(domainbuilders.NewLentCountBuilder().WithValue(5).Build(t), true),
+			wantErr:  domain.ErrUserHasOverdue,
+		},
+	}
 	for _, tt := range tests {
 		t.Run(tt.id+" "+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			tentative := reservation.RestoreTentative(reservationID, tt.customer, tt.slot, tt.deadline, v1)
+			pending := domain.NewPendingLoan(user, book, tt.standing)
 
-			got, err := tentative.Confirm(tt.at, tt.by)
+			got, err := pending.Borrow(loanID, lentAt)
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
 				assert.Zero(t, got)
@@ -115,60 +76,66 @@ func TestTentative_Confirm(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantNext, got.Next)
-			assert.Equal(t, tt.wantEvent, confirmed{
-				reservationID: got.Event.ReservationID(),
-				version:       got.Event.Version().Value(),
-				occurredAt:    got.Event.OccurredAt(),
-				by:            got.Event.By(),
-			})
+			assert.Equal(t, tt.wantEvent, lent{loanID: got.Event.LoanID(), version: got.Event.Version(), lentAt: got.Event.LentAt()})
 		})
 	}
+}
 ```
 
-### 拒まない操作 `(Result, bool)`
+# Given
 
-`TestTentative_Expire` の Then は `wantOK` / `wantNext` / `wantEvent`（射影 struct `expired`: 予約番号・版・発生時刻・利用枠）。`false` 側は `Next` も `Event` もゼロ値。
+Given のフィールドは、初期状態の型の生成関数の引数、または `Restore*` の引数のうち、資料の `Given:` に写るものである。資料の `Given:` に現れない引数（識別子、版）は、表の前で Builder から一度だけ作り、全ケースで同じ値を使う。表を縦に読んで差分が分かるのは、資料が言及する値だけが変わるときだからである。
+
+テストの対象（ここでは `PendingLoan.Borrow`）が受け取る値は、`New*` と `Restore*` で直接組む。対象の外側にある値オブジェクト（利用者番号、資料番号）は、Builder で作る（apply-go-test-convention のテストデータの規則）。
+
+# When
+
+When は、コマンドの引数名そのままのフィールドにする。表の全ケースで同じ値なら、表の前で一度作ってループ本体で渡す（上の例の `loanID` と `lentAt`）。業務の時刻は、時点の値オブジェクトで渡す。
+
+# Then
+
+受ける場合は、`wantNext` に次の状態の型を `Restore*` で Given と同じ値から組み、版だけを進める。`wantEvent` は、イベントの取り出しの関数の値を並べた射影の struct で、版は `wantNext` の版と同じにする。この二つで、「識別子や返却期限を引き継ぎ、版だけが進む」ことを確かめる。
+
+拒む場合は、`wantErr` に資料の拒む理由の具体エラーを入れ、`require.ErrorIs` の後に `assert.Zero(t, got)` で結果がゼロ値であることを見る。
+
+拒まないコマンド（`(Result, bool)`）は、`wantOK` を足し、`false` のときに結果がゼロ値であることを見る。
+
+イベントの型は、テストで確かめない。`<コマンド名>Result` の `Event` の型が、コンパイルで決めている。
+
+# 状態ごとのテスト関数
+
+和型のコマンドは、状態の型ごとにテスト関数を置く。受けない状態のテストは、Given の `Restore*` とコマンドの呼び出しと `wantErr` だけの短い表になる。
 
 ```go
-			tentative := reservation.RestoreTentative(reservationID, tt.customer, tt.slot, tt.deadline, v1)
+func TestReturnedLoan_Return(t *testing.T) {
+	// …表の前は同じ…
+	tests := []struct {
+		id          string
+		name        string
+		description string
+		wantErr     error
+	}{
+		{
+			id:   "BDD-009",
+			name: "返却済みの貸出の本は返せない",
+			description: `…資料の gherkin をそのまま…`,
+			wantErr: domain.ErrAlreadyReturned,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.id+" "+tt.name, func(t *testing.T) {
+			t.Parallel()
 
-			got, ok := tentative.Expire(tt.at)
-			require.Equal(t, tt.wantOK, ok)
-			if !ok {
-				assert.Zero(t, got)
-				return
-			}
-			assert.Equal(t, tt.wantNext, got.Next)
-			assert.Equal(t, tt.wantEvent, expired{
-				reservationID: got.Event.ReservationID(),
-				version:       got.Event.Version().Value(),
-				occurredAt:    got.Event.OccurredAt(),
-				slot:          got.Event.Slot(),
-			})
+			returned := domain.RestoreReturnedLoan(loanID, user, book, lentAt, domain.DueFrom(lentAt), v2)
+
+			got, err := returned.Return()
+			require.ErrorIs(t, err, tt.wantErr)
+			assert.Zero(t, got)
+		})
+	}
+}
 ```
 
-### 絞り込み `As*`
+# 並列
 
-```go
-			got, err := reservation.AsTentative(tt.r)
-			if tt.wantErr != nil {
-				require.ErrorIs(t, err, tt.wantErr)
-				assert.Zero(t, got)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-```
-
-### VO の操作
-
-```go
-			s, err := reservation.NewTimeSlot(tt.room, tt.start, tt.end)
-			require.NoError(t, err)
-			o, err := reservation.NewTimeSlot(tt.oRoom, tt.oStart, tt.oEnd)
-			require.NoError(t, err)
-
-			assert.Equal(t, tt.want, s.Overlaps(o))
-```
-
-どの形でも、検証はループ本体に 1 回。`verify func` は使わない。ドメインの返り値は全部 `assert.Equal` で書ける（絶対パスやソート順のような「表を書く時点で決まらない性質」が無い）。
+ドメインのテストは共有する資源を持たないので、`t.Parallel()` をテスト関数の先頭とサブテストの先頭の両方に置く。
