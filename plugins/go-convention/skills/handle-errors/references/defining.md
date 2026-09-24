@@ -4,17 +4,17 @@
 
 ## 業務の拒否は、資料の拒む理由から
 
-業務の拒否は、ドメインモデルの資料のコマンドの節にある拒む理由から生まれる。拒む理由一つに、具体エラー一つを定義する。同じ理由が複数のコマンドに現れるなら、具体エラーは一つにする。受けない状態から呼ばれたときの拒む理由も、同じ節に一文で書かれているので、同じように定義する。
+業務の拒否の根拠は、業務知識の資料の「拒むときの理由」である。拒む理由一つに、具体エラー一つを定義する。どのコマンドがどの状態でその理由で拒むか（受けない状態から呼ばれたときを含む）は、ドメインモデルの資料から、その対応として読む。同じ理由が複数のコマンドに現れるなら、具体エラーは一つにする。ドメインモデルが業務知識への提案に回した拒む理由は、まだ根拠ではない。定義せずに止まり、提案が確定するのを待つ。
 
 分類は、ほとんどが「業務ルールに反する」になる。資料の拒否が対象の不在を表すなら「存在しない」、同じものの重複を表すなら「すでに存在する」、主体に許されていないことを表すなら「許可されていない」を選ぶ。
 
 ```go
-// 図書館の貸出。資料の「本を借りる」「本を返す」「延滞にする」の拒む理由に一つずつ対応する。
+// 図書館の貸出。業務知識の「拒むときの理由」に一つずつ対応する。
 var (
-	ErrUserHasOverdue   = errors.Wrap(errors.ErrPrecondition, "延滞の貸出がある利用者が本を借りる")
-	ErrLoanLimitReached = errors.Wrap(errors.ErrPrecondition, "貸出上限に達している利用者が本を借りる")
-	ErrAlreadyReturned  = errors.Wrap(errors.ErrPrecondition, "返却済みの本を返す")
-	ErrNotPastDue       = errors.Wrap(errors.ErrPrecondition, "返却期限を過ぎていない貸出を延滞にする")
+	ErrUserHasOverdue   = errors.Define(errors.ErrPrecondition, "延滞の貸出がある利用者が本を借りる")
+	ErrLoanLimitReached = errors.Define(errors.ErrPrecondition, "貸出上限に達している利用者が本を借りる")
+	ErrAlreadyReturned  = errors.Define(errors.ErrPrecondition, "返却済みの本を返す")
+	ErrNotPastDue       = errors.Define(errors.ErrPrecondition, "返却期限を過ぎていない貸出を延滞にする")
 )
 ```
 
@@ -25,7 +25,7 @@ var (
 空の識別子、形式の違う文字列、範囲外の数のように、値の構造として必ず拒む値は、資料に書かれていなくても、値オブジェクトの生成が拒んでよい。これは業務の規則ではなく、その値の不変条件だからである。分類は「入力が不正」にする。
 
 ```go
-var ErrUserNoMalformed = errors.Wrap(errors.ErrInvalidInput, "利用者番号の形式が正しくない")
+var ErrUserNoMalformed = errors.Define(errors.ErrInvalidInput, "利用者番号の形式が正しくない")
 ```
 
 ## 集約の外で守る不変条件

@@ -26,7 +26,7 @@ func DueFrom(lentOn LentOn) Due {
 受け取った値が条件を満たさなければ、error を返す。「無ければ0」「不正なら既定へ」「範囲外なら端に寄せる」を書かない。
 
 ```go
-var ErrVersionNotPositive = errors.Wrap(errors.ErrInvalidInput, "1未満の版")
+var ErrVersionNotPositive = errors.Define(errors.ErrInvalidInput, "1未満の版")
 
 func NewVersion(n int) (Version, error) {
 	if n < 1 {

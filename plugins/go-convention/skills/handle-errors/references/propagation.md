@@ -96,7 +96,7 @@ var loanConstraints = rdb.Constraints{
 保存値を復元するときに値オブジェクトが拒んだら、データの破損として「回復不能」にする。設定値を読み込むときに値オブジェクトや名前付きの型が拒んだら、環境の不備として「回復不能」にする。分類を付け替えてよいのは、この原則に当たる場面だけである。
 
 ```go
-var ErrStoredLoanCorrupted = errors.Wrap(errors.ErrInternal, "保存された貸出を復元できない")
+var ErrStoredLoanCorrupted = errors.Define(errors.ErrInternal, "保存された貸出を復元できない")
 
 user, err := vo.NewUserNo(row.UserNo)
 if err != nil {
