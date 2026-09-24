@@ -69,12 +69,16 @@ if err == nil {
 	l.logger.LogAttrs(ctx, slog.LevelInfo, "RPCを完了した", attrs...)
 	return res, nil
 }
-attrs = append(attrs, slog.String("code", codeOf(err).String()), slog.Any("err", err))
-if errors.Is(errors.Category(err), errors.ErrUnclassified) {
+code, codeFound := rpcerr.Code(err)
+level, levelFound := log.Level(err)
+if !codeFound || !levelFound || errors.Is(errors.Category(err), errors.ErrUnclassified) {
+	// 分類不能、または表の更新漏れ。実装を直す合図として区別する。
+	code, level = connect.CodeInternal, slog.LevelError
 	attrs = append(attrs, slog.Bool("unclassified", true))
 }
-l.logger.LogAttrs(ctx, log.Level(err), "RPCを完了できなかった", attrs...)
-return nil, translate(err)
+attrs = append(attrs, slog.String("code", code.String()), slog.Any("err", err))
+l.logger.LogAttrs(ctx, level, "RPCを完了できなかった", attrs...)
+return nil, connect.NewError(code, fmt.Errorf("%s", errors.Message(err))) // 応答には公開してよい文言だけを載せ、連鎖を渡さない
 ```
 
 記録する `err` は翻訳の前のエラーで、原因がログにだけ残る。応答には、handle-errors が決めた公開の文言だけが出る。panic は、この interceptor が回収し、stack を付けて ERROR で記録し、分類不能として応答する。panic を回収する場所を、ほかに重ねない。
@@ -106,10 +110,15 @@ func (w *OverdueChecker) runOnce(ctx context.Context) error {
 			marked++
 			continue
 		}
-		if errors.Spreads(err) {
+		handling, handlingFound := errors.HandlingOf(err)
+		level, levelFound := log.Level(err)
+		if !handlingFound || !levelFound {
+			return err // 表の更新漏れ。巡回を打ち切り、見張りが分類不能として記録する
+		}
+		if handling.Spreads {
 			return err
 		}
-		w.logger.LogAttrs(ctx, log.Level(err), "貸出を延滞にできなかったため次へ進む",
+		w.logger.LogAttrs(ctx, level, "貸出を延滞にできなかったため次へ進む",
 			slog.String("loan_id", loan.Value()),
 			slog.Any("err", err),
 		)

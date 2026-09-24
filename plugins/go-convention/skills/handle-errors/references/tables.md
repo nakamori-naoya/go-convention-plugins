@@ -35,18 +35,22 @@ var codeTable = map[error]connect.Code{
 	// 残りの14行
 }
 
-func codeOf(err error) connect.Code {
+// Code は、エラーの分類の Code を返す。表に分類が無ければ false を返す。
+func Code(err error) (connect.Code, bool) {
 	code, ok := codeTable[errors.Category(err)]
-	if !ok {
-		return codeTable[errors.ErrUnclassified]
-	}
-	return code
+	return code, ok
 }
 ```
 
-表に無い分類に当たったときは、「分類不能」の行を使う。これは、write-go-code の「未知の値を丸めない（`map` を引けなかったら error を返す）」の、唯一の例外である。境界はエラーを受け取った最後の場所で、ここで error を返しても受け取る相手がいない。そして「分類不能」は15の分類の一つで、ERROR と `unclassified` の属性で記録されるので、丸めても失敗は隠れず、人が表を直す合図になる。網羅はテストで確かめるので、この経路に来るのは表の更新漏れだけである。処理の表とログレベルの表も、同じ理由で同じ扱いにする。
+# 表に無い分類
 
-表は、最も外の interceptor の package に一つだけ置く。handler の本文と、要求と応答の変換関数では、`connect.NewError` を作らない。内側で `connect.Error` が作られていたら、境界はそれを「分類不能」として扱う。
+表を引く関数は、表に分類が無いことを `false` で呼び手に返し、既定の値へ丸めない。write-go-code の「未知の値を丸めない（`map` を引けなかったら error を返す）」と同じ規則である。
+
+表に無いことを受け取った境界は、それを表の更新漏れ、つまり実装の間違いとして扱う。応答は「分類不能」の Code と固定の文言にし、記録には `unclassified` の属性を付けて ERROR で残す。黙って既定の値で続けるのではなく、実装の間違いとして人に知らせる扱いなので、丸めにはならない。境界はエラーを受け取る最後の場所で、ここで error を返しても受け取る相手がいないので、この扱いを境界の中で閉じる。処理の表とログレベルの表も同じ形にする。
+
+網羅はテストで確かめるので、本番でこの経路に来るのは、表の更新が漏れたときだけである。
+
+表は、表を引く関数を公開する一つの package に置き、境界（interceptor）がそれを呼ぶ。handler の本文と、要求と応答の変換関数では、`connect.NewError` を作らない。内側で `connect.Error` が作られていたら、境界はそれを「分類不能」として扱う。
 
 # 処理の表
 
@@ -76,29 +80,42 @@ func codeOf(err error) connect.Code {
 
 「回復不能」が「全体に及ぶ」でないのは、データの破損のように一件に閉じる場合が多いからである。設定の不備のように全体に及ぶ回復不能は、起動の時点でプロセスの境界が止める。
 
-処理の表は、横断的関心事の package に二つの関数（`errors.Retryable(err) bool`、`errors.Spreads(err) bool`）として置き、ワーカーと手順の境界が呼ぶ。実装のコードが呼ぶものだけを公開する。
+処理の表は、分類の package に一つの関数として置き、ワーカーと手順の境界が呼ぶ。
+
+```go
+// Handling は、失敗を処理する側が次に何をするかを決める二つの性質である。
+type Handling struct {
+	Retryable bool // 同じ操作をもう一度行えば通る見込みがある
+	Spreads   bool // 同じ処理の残りの件も同じ理由で失敗する
+}
+
+// HandlingOf は、エラーの分類の Handling を返す。表に分類が無ければ false を返す。
+func HandlingOf(err error) (Handling, bool)
+```
 
 # 網羅のテスト
 
-二つの表が15の分類を過不足なく持つことは、テストで確かめる。テストの側に、15の分類と期待の値を並べた表を持ち、公開の関数（`codeOf` を使う境界の翻訳、`Retryable`、`Spreads`）を通して一つずつ確かめる。実装の側に、分類の一覧を返す入口を足さない。
+三つの表が15の分類を過不足なく持つことは、テストで確かめる。テストの側に、15の分類と期待の値を並べた表を持ち、表を引く公開の関数（`Code`、`HandlingOf`、write-logs の `Level`）を通して一つずつ確かめる。確かめるのは、分類ごとに `true` が返ることと、期待の値である。実装の側に、分類の一覧を返す入口を足さない。
 
 ```go
-func TestRetryable(t *testing.T) {
+func TestHandlingOf(t *testing.T) {
 	tests := []struct {
 		id       string
 		name     string
 		category errors.Base
-		want     bool
+		want     errors.Handling
 	}{
-		{id: "retryable-conflict", name: "同時更新で競合した失敗は再試行で通りうる", category: errors.ErrConflict, want: true},
+		{id: "handling-conflict", name: "同時更新で競合した失敗は再試行で通りうるが一件に閉じる", category: errors.ErrConflict, want: errors.Handling{Retryable: true, Spreads: false}},
 		// 15の分類をすべて並べる
 	}
 	for _, tt := range tests {
 		t.Run(tt.id+" "+tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, errors.Retryable(errors.Define(tt.category, "テスト")))
+			got, ok := errors.HandlingOf(errors.Define(tt.category, "テスト"))
+			require.True(t, ok)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 ```
 
-分類は増やさないので、期待の表が15行で固定される。表の行が欠けると、欠けた分類は「分類不能」として扱われ、期待と食い違ってテストが落ちる。テストの形は apply-go-test-convention に従う。
+分類は増やさないので、期待の表が15行で固定される。表のどの行が欠けても、その分類で `false` が返ってテストが落ちる。欠けた行の値が既定のどれかと偶然同じでも、見逃さない。テストの形は apply-go-test-convention に従う。

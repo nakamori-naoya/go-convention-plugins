@@ -34,7 +34,7 @@
 | 回復不能 | ERROR |
 | 分類不能 | ERROR |
 
-表は、ログの横断的関心事の package に一つだけ置き、公開する関数は `Level(err error) slog.Level` 一つにする。表に無い分類に当たったときは、「分類不能」の行を使う（ERROR になる）。これが「丸めない」の例外として許される理由は、handle-errors の境界の表と同じである。
+表は、ログの横断的関心事の package に一つだけ置き、公開する関数は `Level(err error) (slog.Level, bool)` 一つにする。表に分類が無ければ `false` を返し、既定のレベルへ丸めない。`false` を受け取った境界は、それを表の更新漏れとして扱い、ERROR と `unclassified` の属性で記録する。扱いの理由は、handle-errors の境界の表と同じである。
 
 ```go
 var levelTable = map[error]slog.Level{
@@ -42,18 +42,15 @@ var levelTable = map[error]slog.Level{
 	// 残りの14行
 }
 
-func Level(err error) slog.Level {
+func Level(err error) (slog.Level, bool) {
 	level, ok := levelTable[errors.Category(err)]
-	if !ok {
-		return levelTable[errors.ErrUnclassified]
-	}
-	return level
+	return level, ok
 }
 ```
 
 分類不能の記録には、`unclassified` の属性を真で足す。実装の間違いか翻訳の漏れで、実装を直す合図だからである。
 
-表が15の分類を過不足なく持つことは、テストの側に15の分類と期待のレベルを並べた表を持ち、`Level` を通して一つずつ確かめる。実装の側に、分類の一覧を返す入口を足さない。テストの形は apply-go-test-convention に従う。
+表が15の分類を過不足なく持つことは、テストの側に15の分類と期待のレベルを並べた表を持ち、`Level` を通して、分類ごとに `true` が返ることと期待のレベルを一つずつ確かめる。実装の側に、分類の一覧を返す入口を足さない。テストの形は apply-go-test-convention に従う。
 
 # レベルとほかの表の関係
 
