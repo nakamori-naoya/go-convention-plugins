@@ -1,6 +1,6 @@
 # command の形（戦術的 DDD）
 
-command の usecase は、**集約を見つける → コマンドを一回呼ぶ → 結果を適用する**、の三つだけで書く。どの処理をこの形で書くかは、apply-layer-convention が決める。
+command の流れ（集約を見つける、コマンドを一回呼ぶ、結果を適用する）と、usecase が判断も材料集めもしない理由は、development-convention の `apply-layer-convention` が持つ。この文書は、それを Go で書く形だけを示す。
 
 # 形
 
@@ -38,9 +38,9 @@ func (u *ReturnBook) Execute(ctx context.Context, in ReturnBookInput) error {
 
 入力は値オブジェクトで受ける。プリミティブから値オブジェクトへの変換は入口（implement-handler）が行い、usecase は検証しない。
 
-依存は、トランザクションの管理、ドメインの永続化ポート、採番器、制御できない外部の境界のポートだけである。**読み取りのポート（`usecase/query`）は呼ばない。** 判断の材料は、リポジトリの Find が集めて初期状態の型へ持たせる。材料を usecase が集めると、材料を集めるための分岐と逐次の呼び出しが usecase に入り込み、材料と保存が同じトランザクションで行われる保証も崩れる。
+依存は、`tx.Manager`、ドメインの永続化ポート、採番器、制御できない外部の境界のポートだけである。`usecase/query` の読み取りのポートは import しない。判断の材料は、`FindPendingLoan` のような Find が初期状態の型へ持たせて返す。
 
-usecase は、状態を見て分岐しない。型スイッチ、状態の比較、件数の解釈、時刻の比較を書かない。受けるか拒むかは、和型のコマンドを呼べば、状態ごとの型が決める。コマンドを和型に置けない（受けない状態の拒む理由が資料に無い）間は、その usecase を書かない（implement-domain-model）。
+Go では、型スイッチ、状態の比較、件数の解釈、時刻の比較を usecase に書かない。和型の `Loan` のコマンドを呼べば、状態ごとの型が受けるか拒むかを決める。コマンドを和型に置けない（受けない状態の拒む理由が資料に無い）間は、その usecase を書かない（implement-domain-model）。
 
 エラーは、包まずにそのまま返す（handle-errors）。記録しない（write-logs）。
 
