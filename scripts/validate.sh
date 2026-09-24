@@ -169,74 +169,83 @@ else
   cat "$TMP_ROOT/check-cases.out"; fail "check-cases.py: tests/examples"
 fi
 
-# check-cases.py の負例と正例。numseq_test.go を1点だけ変えた複製（または同じディレクトリに1ファイル足した複製）に対する終了コードと出力を見る
+# check-cases.py の負例と正例。lending_test.go を1点だけ変えた複製（または同じディレクトリに1ファイル足した複製）に対する終了コードと出力を見る
 mutated_case() {
   local label=$1 key=$2 expect=$3 needle=${4:-} dir="$TMP_ROOT/mut-$2"
   mkdir -p "$dir"
-  cp "$EXAMPLES/numseq/numseq_test.go" "$dir/numseq_test.go"
-  python3 - "$dir/numseq_test.go" "$key" <<'PY'
+  cp "$EXAMPLES/lending/lending_test.go" "$dir/lending_test.go"
+  python3 - "$dir/lending_test.go" "$key" <<'PY'
 from pathlib import Path
 import sys
 
 path = Path(sys.argv[1])
 text = path.read_text()
+given_when = (
+    "description: `Given: 利用者は貸出中の本を4冊借りており、延滞の貸出は無い\n"
+    "When: 利用者が2026年10月1日 10:00に本を借りる\n"
+)
+then_7c2e19 = "Then: 貸出中の貸出が生まれ、返却期限は2026年10月15日である`,"
+loop_end = "\t\t\tassert.Equal(t, tt.wantDueDay, got.Due().Day())\n\t\t})\n\t}\n}\n"
+sut_line = "\t\t\tpending := lending.NewPendingLoan(lending.NewStanding(tt.lent, tt.overdue))\n"
 edits = {
-    "dup-id": ('"b4a0f3"', '"7c2e19"'),
-    "dup-name": ('"同じ値が2つあれば別の位置として組にする"', '"和が目標になる2つの位置を返す"'),
+    "dup-id": ('"7c2e19"', '"91d6c8"'),
+    "dup-name": ('"4冊借りている利用者は5冊目を借りられる"', '"5冊借りている利用者は6冊目を借りられない"'),
     "empty-id": ('"91d6c8"', '""'),
     "when-before-given": (
-        "description: `Given: 数列 3, 3 がある\nWhen: 和が 6 になる組を探す\n",
-        "description: `When: 和が 6 になる組を探す\nGiven: 数列 3, 3 がある\n",
+        given_when,
+        "description: `When: 利用者が2026年10月1日 10:00に本を借りる\n"
+        "Given: 利用者は貸出中の本を4冊借りており、延滞の貸出は無い\n",
     ),
     "when-indented": (
-        "description: `Given: 数列 3, 3 がある\nWhen: 和が 6 になる組を探す\n",
-        "description: `Given: 数列 3, 3 がある\n\tWhen: 和が 6 になる組を探す\n",
+        given_when,
+        "description: `Given: 利用者は貸出中の本を4冊借りており、延滞の貸出は無い\n"
+        "\tWhen: 利用者が2026年10月1日 10:00に本を借りる\n",
     ),
-    "internal-package": ("package numseq_test\n", "package numseq\n"),
+    "internal-package": ("package lending_test\n", "package lending\n"),
     "one-line-case": (
-        '\t\t\tid:   "91d6c8",\n\t\t\tname: "負の値を含んでいても組を見つける",\n',
-        '\t\t\tid: "91d6c8", name: "負の値を含んでいても組を見つける",\n',
+        '\t\t\tid:   "91d6c8",\n\t\t\tname: "延滞があり上限にも達している利用者は延滞の理由で拒まれる",\n',
+        '\t\t\tid: "91d6c8", name: "延滞があり上限にも達している利用者は延滞の理由で拒まれる",\n',
     ),
     "and-after-when": (
-        "When: 和が 9 になる組を探す\nThen:",
-        "When: 和が 9 になる組を探す\n  And: もう一度探す\nThen:",
+        "When: 利用者が2026年10月20日 10:00に本を借りる\nThen: 延滞の",
+        "When: 利用者が2026年10月20日 10:00に本を借りる\n  And: もう一度借りる\nThen: 延滞の",
     ),
     # 正例。行頭の And: も Then: の後なら許す
     "and-at-line-start": (
-        "Then: 位置 0 と 1 の組が返る`,\n\t\t\tvalues: []int{2, 7, 11, 15},",
-        "Then: 位置 0 と 1 の組が返る\nAnd: 数列は変わらない`,\n\t\t\tvalues: []int{2, 7, 11, 15},",
+        then_7c2e19,
+        "Then: 貸出中の貸出が生まれ、返却期限は2026年10月15日である\nAnd: 借りている冊数は5冊になる`,",
     ),
     # 正例。NOTE: 行とそれに続く字下げ行は見出しに数えない（字下げした When: があっても無視する）
     "note-lines-ignored": (
-        "Then: 位置 0 と 1 の組が返る`,\n\t\t\tvalues: []int{2, 7, 11, 15},",
-        "Then: 位置 0 と 1 の組が返る\n  NOTE: Rule: 和が目標になる組を返す\n    When: 説明の続き\n    Reason: 2 と 7 の和が 9 のため`,\n\t\t\tvalues: []int{2, 7, 11, 15},",
+        then_7c2e19,
+        "Then: 貸出中の貸出が生まれ、返却期限は2026年10月15日である\n"
+        "  NOTE: Rule: 貸出上限に達していない利用者は借りられる\n    When: 説明の続き\n"
+        "    Reason: 4冊は上限の5冊に達していない`,",
     ),
     # 負例。別ファイルのテスト関数に同じ id があれば、ディレクトリ内の重複として拒む
-    "dup-id-across-files": ("package numseq_test\n", "package numseq_test\n"),
+    "dup-id-across-files": ("package lending_test\n", "package lending_test\n"),
     # 正例。Benchmark の本文に Test と同じ id/name があっても、Test に併合しない
     "benchmark-not-merged": (
-        "\t\t\tassert.Equal(t, tt.wantHi, got.Hi())\n\t\t})\n\t}\n}\n",
-        "\t\t\tassert.Equal(t, tt.wantHi, got.Hi())\n\t\t})\n\t}\n}\n"
-        "\nfunc BenchmarkFindPairSummingTo(b *testing.B) {\n"
-        "\tseq := numseq.NewNumberSequence([]int{2, 7, 11, 15})\n"
+        loop_end,
+        loop_end
+        + "\nfunc BenchmarkPendingLoan_Borrow(b *testing.B) {\n"
         "\tfixed := struct {\n\t\tid   string\n\t\tname string\n\t}{\n"
-        '\t\tid:   "TC-001",\n\t\tname: "和が目標になる2つの位置を返す",\n\t}\n'
-        "\t_ = fixed\n\tfor b.Loop() {\n\t\t_, _ = numseq.FindPairSummingTo(seq, 9)\n\t}\n}\n",
+        '\t\tid:   "BDD-001",\n\t\tname: "延滞の無い利用者が本を借りると貸出中の貸出が生まれる",\n\t}\n'
+        "\t_ = fixed\n\tfor b.Loop() {\n\t}\n}\n",
     ),
     # 正例。被験体の構造体リテラルの id フィールドはケースではない
     "sut-id-ignored": (
-        "\t\t\tseq := numseq.NewNumberSequence(tt.values)\n",
+        sut_line,
         "\t\t\tline := struct {\n\t\t\t\tid   string\n\t\t\t\tkind int\n\t\t\t}{\n"
-        '\t\t\t\tid:   "L-1",\n\t\t\t\tkind: 0,\n\t\t\t}\n\t\t\t_ = line\n'
-        "\t\t\tseq := numseq.NewNumberSequence(tt.values)\n",
+        '\t\t\t\tid:   "L-1",\n\t\t\t\tkind: 0,\n\t\t\t}\n\t\t\t_ = line\n' + sut_line,
     ),
     # 正例。name にエスケープした引用符があってもケースとして読む
     "escaped-quote-name": (
-        '"和が目標になる2つの位置を返す"',
-        '"和が目標になる \\"2つ\\" の位置を返す"',
+        '"4冊借りている利用者は5冊目を借りられる"',
+        '"4冊借りている利用者は \\"5冊目\\" を借りられる"',
     ),
     # 正例。同じディレクトリに TestMain だけの main_test.go があっても、TestMain を Test* として扱わない
-    "testmain-accepted": ("package numseq_test\n", "package numseq_test\n"),
+    "testmain-accepted": ("package lending_test\n", "package lending_test\n"),
 }
 old, new = edits[sys.argv[2]]
 if old not in text:
@@ -244,7 +253,7 @@ if old not in text:
 path.write_text(text.replace(old, new, 1))
 if sys.argv[2] == "dup-id-across-files":
     (path.parent / "other_test.go").write_text(
-        "package numseq_test\n\nimport \"testing\"\n\nfunc TestOther(t *testing.T) {\n"
+        "package lending_test\n\nimport \"testing\"\n\nfunc TestOther(t *testing.T) {\n"
         "\ttests := []struct {\n\t\tid          string\n\t\tname        string\n\t\tdescription string\n\t}{\n"
         "\t\t{\n\t\t\tid:   \"7c2e19\",\n\t\t\tname: \"別のファイルの別のケース\",\n"
         "\t\t\tdescription: `Given: 何かがある\nWhen: 何かをする\nThen: 何かが返る`,\n\t\t},\n\t}\n"
@@ -252,7 +261,7 @@ if sys.argv[2] == "dup-id-across-files":
     )
 if sys.argv[2] == "testmain-accepted":
     (path.parent / "main_test.go").write_text(
-        "package numseq_test\n\nimport (\n\t\"os\"\n\t\"testing\"\n)\n\n"
+        "package lending_test\n\nimport (\n\t\"os\"\n\t\"testing\"\n)\n\n"
         "func TestMain(m *testing.M) {\n\tos.Exit(m.Run())\n}\n"
     )
 PY
@@ -298,7 +307,7 @@ BDD_CHECK="$SKILL/scripts/check-bdd-coverage.py"
 BDD_FIXTURE="$ROOT/tests/bdd-coverage"
 BDD_DOC="docs/lending/業務知識.md"
 if python3 "$BDD_CHECK" "$BDD_FIXTURE" "$BDD_DOC" >"$TMP_ROOT/bdd.out" 2>&1; then
-  pass "check-bdd-coverage.py: 資料の各 BDD が宣言した資料のテストの id: か列挙にちょうど 1 回現れる（接頭辞付きの ID を含む）"
+  pass "check-bdd-coverage.py: 資料の各 BDD が宣言した資料のテストの id: か列挙にちょうど 1 回現れる"
 else
   cat "$TMP_ROOT/bdd.out"; fail "check-bdd-coverage.py: tests/bdd-coverage"
 fi
@@ -333,6 +342,10 @@ elif key == "unowned-without-reason":
 elif key == "unowned-not-last":
     edit(domain, '"BDD-003"', '"9e41b7"')
     domain.write_text(domain.read_text() + "\n// どのテストも担わない BDD:\n// BDD-003 理由\n\nfunc TestLater(t *testing.T) {}\n")
+elif key == "prefixed-id":
+    doc = root / "docs/lending/業務知識.md"
+    edit(doc, "[BDD-004]", "[BDD-OUT-004]")
+    edit(usecase, '"BDD-004"', '"BDD-OUT-004"')
 elif key == "both-id-and-list":
     domain.write_text(domain.read_text() + "\n// どのテストも担わない BDD:\n// BDD-003 理由\n")
 PY
@@ -355,6 +368,7 @@ bdd_mutated "資料に無い ID" unknown-id reject "見出しに無い"
 bdd_mutated "id と列挙の両方に現れる BDD" both-id-and-list reject "か所に現れる"
 bdd_mutated "理由の無い列挙" unowned-without-reason reject "理由が無い"
 bdd_mutated "最後に無い列挙" unowned-not-last reject "ファイルの最後に置く"
+bdd_mutated "資料の種類の接頭辞を足した ID" prefixed-id reject "BDD-<3桁以上の連番>"
 bdd_mutated "どのテストも担わない BDD の列挙（境界例）" unowned-listed accept
 
 # develop-<layer>（TDDの1単位）: 同packageの公開入口を skill: で、テスト → 赤 → 実装 → 緑 → 整える の順に呼ぶ

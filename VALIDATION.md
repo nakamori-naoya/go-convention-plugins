@@ -44,7 +44,7 @@ bash scripts/validate.sh
 4. `name:` の値が同じディレクトリの `*_test.go` 全体で重複しない
 5. `description:` は raw string で、`Given:` / `When:` / `Then:` を行頭にこの順で各1回持ち、`And:` は行頭または字下げで `Given:` か `Then:`（またはその `And:`）の後にだけ現れ、`NOTE:` で始まる行とそれに続く字下げ行は無視する
 
-`tests/examples/` を受理する正常系（字下げした `And:` と `NOTE:` を含む）に加え、`numseq_test.go` を1点だけ変えた複製（または同じディレクトリに1ファイル足した複製）に対して次を実行します。
+`tests/examples/` を受理する正常系（字下げした `And:` と `NOTE:` を含む）に加え、`lending_test.go` を1点だけ変えた複製（または同じディレクトリに1ファイル足した複製）に対して次を実行します。
 
 | 種別 | 変更 | 期待 |
 |---|---|---|
@@ -54,7 +54,7 @@ bash scripts/validate.sh
 | 負例 | 空の `id`（`""`） | 拒否（`id が空`） |
 | 負例 | `Given` / `When` の逆順 | 拒否（`行頭にこの順で各1回でない`） |
 | 負例 | `When:` を行頭でなく TAB で字下げ | 拒否（`行頭にこの順で各1回でない`） |
-| 負例 | 内部パッケージ（`package numseq`） | 拒否（`_test でない`） |
+| 負例 | 内部パッケージ（`package lending`） | 拒否（`_test でない`） |
 | 負例 | 1行に `id` と `name` を並べたケース | 拒否（`複数行で書く`） |
 | 負例 | `When:` 直後の字下げした `And:` | 拒否（`の後以外にある`） |
 | 正例 | `Then:` の後に行頭の `And:` を足す | 受理（`And:` は行頭でも字下げでもよい） |
@@ -79,13 +79,13 @@ bash scripts/validate.sh
 `plugins/go-convention/skills/apply-go-test-convention/scripts/check-bdd-coverage.py` は、資料の一つの BDD を repository 全体でちょうど一つのテストが名乗る、という規則の構造を検査します。
 
 ```text
-基準資料: 引数で渡した資料（業務知識・データモデル）の `### [BDD-…] 見出し` と、apply-go-test-convention の references/case-identity.md の宣言と列挙の形
+基準資料: bdd-discovery-and-formulation の write-bdd の「BDDの番号は資料の中で一意か」（見出しは `### [BDD-<3桁以上の連番>] <業務結果>`、資料の種類の接頭辞を足さない）、引数で渡した資料の見出し、apply-go-test-convention の references/case-identity.md の宣言と列挙の形
 入力: repository root 配下の全 *_test.go（.git と vendor を除く）と、引数の資料
 正規化: 資料の path は repository root からの相対 path にそろえる。`id:` 行は直後が `name:` のときだけケースと見なす
 合格述語: 各資料に見出しが1つ以上あり資料内で ID が重複しない。BDD の id か列挙を持つファイルは `// BDD の資料:` をちょうど1つ持ち、それが引数の資料である。その id と列挙の ID は宣言した資料にある。各資料の各 ID は、その資料を宣言したファイル全体で、id: か列挙のどちらかにちょうど1回現れる。列挙は1ファイルに1つで、最後にあり、各行に理由がある
 失敗時の診断: 資料と ID、現れた場所（ファイル:行）、宣言の数、列挙の形の違反
-正例: tests/bdd-coverage（接頭辞付きの ID `BDD-OUT-001` を含む）
-反例: 別の package の同じ BDD、どこにも現れない BDD、資料の宣言の無いファイル、資料に無い ID、id と列挙の両方、理由の無い列挙、最後に無い列挙
+正例: tests/bdd-coverage
+反例: 別の package の同じ BDD、どこにも現れない BDD、資料の宣言の無いファイル、資料に無い ID、資料の種類の接頭辞を足した ID（`BDD-OUT-004`）、id と列挙の両方、理由の無い列挙、最後に無い列挙
 境界例: どのテストも担わない BDD を列挙で持つ（受理）
 意味評価として残す範囲: どのテストがその BDD を主に担うべきか、列挙の理由が正しいか、description が資料の gherkin と一致するか
 ```
