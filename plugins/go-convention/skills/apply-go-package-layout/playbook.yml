@@ -9,16 +9,19 @@ requires: []
 steps:
   - id: inspect-logical-input
     agent_work: invoking_agent
-    purpose: "論理入力を検査する"
+    purpose: "論理入力を確かめる"
   - id: map-package-tree
     agent_work: invoking_agent
-    purpose: "Go package treeへ写す"
+    purpose: "木へ写す"
   - id: decide-names-and-public-surface
     agent_work: invoking_agent
-    purpose: "package名と公開面を決める"
+    purpose: "package の名前と公開面を決める"
   - id: apply-import-direction
     agent_work: invoking_agent
-    purpose: "import方向を適用する"
+    purpose: "import の向きを直す"
   - id: repair-references-and-verify
     agent_work: invoking_agent
-    purpose: "移動後の参照を直して検証する"
+    purpose: "参照を直して確かめる"
+  - id: report
+    agent_work: invoking_agent
+    purpose: "報告する"
