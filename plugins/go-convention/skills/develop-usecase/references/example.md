@@ -64,9 +64,6 @@ type PublishOverdueNotices struct {
 	batch     contract.BatchSize
 }
 
-// maxClaims は、打ち切るまでの回収の回数である。データモデルの資料の仮置き（5回）。
-var maxClaims = contract.NewClaimLimit(5)
-
 func (u *PublishOverdueNotices) Execute(ctx context.Context) error {
 	var candidates []contract.ClaimCandidate
 	if err := u.tx.Run(ctx, claimTxOptions, func(ctx context.Context) error {
@@ -86,7 +83,10 @@ func (u *PublishOverdueNotices) Execute(ctx context.Context) error {
 		if !handlingFound || !levelFound || handling.Spreads {
 			return err // 表の更新漏れか、全体に及ぶ失敗。残りを試さずに返す
 		}
-		u.logger.LogAttrs(ctx, level, "延滞の通知の一件を送れなかったため次へ進む",
+		if !handling.Reprocessable {
+			level = slog.LevelError // 人が直すまで、リースが切れるたびに回収し直される
+		}
+		u.logger.LogAttrs(ctx, level, "延滞の通知の一件を送れなかったため、リースが切れた後の回収に任せて次へ進む",
 			slog.String("request_id", c.RequestID().Value()),
 			slog.Bool("reprocessable", handling.Reprocessable),
 			slog.Any("err", err),
@@ -96,12 +96,9 @@ func (u *PublishOverdueNotices) Execute(ctx context.Context) error {
 }
 
 // publishOne は、回収と記録をそれぞれのトランザクションで確定させ、送るのはその間の外で行う。
+// 送れなかった要求は記録せずに残し、リースが切れた後の回収に任せる。
+// コマンドデータモデルに打ち切りの表が無いので、この手順は打ち切らない。
 func (u *PublishOverdueNotices) publishOne(ctx context.Context, c contract.ClaimCandidate) error {
-	if c.NextVersion().Exceeds(maxClaims) {
-		return u.tx.Run(ctx, recordTxOptions, func(ctx context.Context) error {
-			return u.requests.RecordFailed(ctx, c.RequestID(), contract.ReasonClaimLimitReached)
-		})
-	}
 	var claim contract.Claim
 	if err := u.tx.Run(ctx, claimTxOptions, func(ctx context.Context) error {
 		var err error
@@ -111,15 +108,6 @@ func (u *PublishOverdueNotices) publishOne(ctx context.Context, c contract.Claim
 		return err
 	}
 	if err := u.publisher.Publish(ctx, claim.RequestID(), claim.Notice()); err != nil {
-		handling, found := errors.HandlingOf(err)
-		if !found || handling.Spreads || handling.Reprocessable {
-			return err // 再処理で通りうるなら記録せず、リースが切れた後の回収に任せる
-		}
-		if recErr := u.tx.Run(ctx, recordTxOptions, func(ctx context.Context) error {
-			return u.requests.RecordFailed(ctx, claim.RequestID(), contract.FailureReasonOf(err))
-		}); recErr != nil {
-			return recErr
-		}
 		return err
 	}
 	return u.tx.Run(ctx, recordTxOptions, func(ctx context.Context) error {
