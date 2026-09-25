@@ -33,8 +33,7 @@
   },
   "metadata": {
     "harness": {
-      "marketplace": "go-convention",
-      "contractVersion": 1
+      "marketplace": "go-convention"
     }
   }
 }
