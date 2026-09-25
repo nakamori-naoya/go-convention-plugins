@@ -26,7 +26,7 @@
 
 # 技術的な処理のライフサイクル
 
-技術的な処理（Outbox の要求、回収、成功、失敗）のテーブルの型も、W1 が決める。図書館の延滞の通知では、要求（`overdue_notice_requested_events`）、回収（`overdue_notice_claimed_events`）、成功（`overdue_notice_succeeded_events`）、失敗（`overdue_notice_failed_events`）の四つである。どれも追加だけで、基底イベントを置かない。
+技術的な処理（Outbox の要求、回収、成功、失敗）のテーブルの型も、データモデルの資料が決める。図書館の延滞の通知では、要求（`overdue_notice_requested_events`）、回収（`overdue_notice_claimed_events`）、成功（`overdue_notice_succeeded_events`）、失敗（`overdue_notice_failed_events`）の四つである。どれも追加だけで、基底イベントを置かない。
 
 要求は、発生元の集約のイベントの `Apply` が、同じトランザクションで追加する（延滞にする `ApplyOverdue` が、延滞の通知の要求を追加する）。回収、成功、失敗は、単純なパターンの手順のリポジトリ相当の口が追加する（[単純なパターンの口](procedure-store.md)）。
 
