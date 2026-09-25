@@ -1,40 +1,34 @@
 {
   "name": "go-convention",
   "version": "4.1.0",
-  "description": "Go 1.27 のコーディング・ドメインモデル・永続化・usecase・handler・エラー・ログ・テストの規約と、TDD の一単位を仕上げる skill を配布する",
+  "description": "Go 1.27 のドメイン、永続化、usecase、入口の層ごとの実装とテスト（TDD の一単位）と、言語、エラー、ログ、テストの共通の形、横断的関心事の契約の規約を配布する",
   "author": {
     "name": "NaoyaNakamori"
   },
   "skills": [
     "./skills/write-go-code",
-    "./skills/apply-go-package-layout",
-    "./skills/implement-domain-model",
-    "./skills/implement-repository",
-    "./skills/implement-query-service",
-    "./skills/implement-usecase",
-    "./skills/implement-handler",
+    "./skills/apply-crosscutting-contracts",
     "./skills/handle-errors",
     "./skills/write-logs",
     "./skills/apply-go-test-convention",
-    "./skills/test-domain-model",
-    "./skills/test-repository",
-    "./skills/test-usecase",
-    "./skills/test-handler",
-    "./skills/develop-go-unit"
+    "./skills/develop-domain-model",
+    "./skills/develop-repository",
+    "./skills/develop-usecase",
+    "./skills/develop-handler"
   ],
   "interface": {
     "displayName": "Go Convention",
     "shortDescription": "Go の実装とテストを共通規約で書く",
-    "longDescription": "Go 1.27 を前提に、コーディング規約、状態ごとに型を分けた集約と生成の時点で検証する値オブジェクト、sqlc と pgx のリポジトリと query service、usecase、Connect-RPC の handler、エラー、ログ、そして BDD 資料の ID をそのまま使うテストの規約を、新規・既存のコードへ適用します。",
+    "longDescription": "Go 1.27 を前提に、状態ごとに型を分けた集約と生成の時点で検証する値オブジェクト、sqlc と pgx の永続化、usecase、Connect-RPC の入口を、層ごとにテストを先に赤で置いてから実装する一つの skill で書き、言語、エラー、ログ、テストの共通の形、トランザクションや時計や採番の契約を横断の規約として適用します。",
     "developerName": "NaoyaNakamori",
     "category": "Developer Tools",
     "capabilities": [
       "Skills"
     ],
     "defaultPrompt": [
-      "この集約を Go で実装して。",
-      "この集約のテストを業務知識の資料の BDD から書いて。",
-      "このリポジトリのテストをデータモデル資料から書いて。"
+      "この集約を Go で TDD で実装して。",
+      "このリポジトリをデータモデル資料の BDD からテストと実装のセットで書いて。",
+      "この usecase を実物の DB を通すテストから書いて。"
     ]
   },
   "metadata": {

@@ -1,6 +1,6 @@
 # go-convention
 
-**Go 1.27 の実装とテストの規約を、関心ごとに分けた 14 の自己完結skillと、TDD の 1 単位の入口 1 つから適用します。** package manifestが`skills/<name>/SKILL.md`を直接公開し、規約の基準資料は各skill、工程順序の定義は同じdirectoryの`playbook.yml` v2にあります。同じagentが`agent_work: invoking_agent`の工程を宣言順に実行します。
+**Go 1.27 の実装とテストの規約を、層ごとの4つの skill と、層をまたぐ5つの skill から適用します。** package manifestが`skills/<name>/SKILL.md`を直接公開し、規約の基準資料は各skillの`SKILL.md`と`references/`です。
 
 ## これは何か／何ではないか
 
@@ -10,25 +10,21 @@
 
 ## 入口
 
+層の skill は、実装とそのテストを一つに持ち、テストを先に赤で置いてから実装する一つの単位を仕上げます。
+
 | 入口 | 何をするか |
 |---|---|
-| `write-go-code` | Go 1.27 の言語レベルの規約（プリミティブを使わない、丸めない、関数の形、interface、命名、コメント、ツール）で書く・直す |
-| `apply-go-package-layout` | 確定済みの論理責務を Go の package 配置と import 方向へ写す |
-| `implement-domain-model` | ドメインモデルの資料から、値オブジェクト、集約、イベント、永続化ポートを実装する |
-| `implement-repository` | 集約の永続化ポートと単純なパターンの口（DB へのアクセスを受け持つ関数の集まり）を sqlc と pgx で実装する |
-| `implement-query-service` | CQRS の読み取り側を sqlc で実装する |
-| `implement-usecase` | command、単純なパターンの手順、query の usecase を実装する |
-| `implement-handler` | Connect-RPC の handler と interceptor を実装する |
-| `handle-errors` | エラーを15の分類から定義し、運び、翻訳し、応答の表と処理の表で扱う |
-| `write-logs` | ログレベルの意味と分類からの表、境界で 1 回だけ記録する場所、logger の注入、属性と秘匿 |
-| `apply-go-test-convention` | テストの形（テーブル駆動・id/name/description・Given/When/Then） |
-| `test-domain-model` | 集約・エンティティ・値オブジェクトのテストを資料の BDD から書く |
-| `test-repository` | 永続化層（リポジトリ・query service）のテストをデータモデル資料から書く |
-| `test-usecase` | usecase のテストを、配線と境界だけを実物で確かめる形で書く |
-| `test-handler` | API のテストを、本番の組み立てで外部の境界だけを差し替えて書く |
-| `develop-go-unit` | Go の 1 単位（ドメイン、リポジトリ、Query の実装、usecase、入口のどれか一つ）を、テスト → 赤 → 実装 → 緑 → 整える の順で完成させる |
+| `develop-domain-model` | ドメインモデルの資料から、値オブジェクト、集約、イベント、永続化ポートとそのテストを書く |
+| `develop-repository` | 集約のリポジトリ、手順の口、Query の実装とその実 DB のテストを sqlc と pgx で書く |
+| `develop-usecase` | command、単純なパターンの手順、query の usecase と、配線と境界を確かめるテストを書く |
+| `develop-handler` | Connect-RPC の入口、interceptor、組み立てと、本番の組み立てを通す API のテストを書く |
+| `write-go-code` | 言語の規約（型で業務を運ぶ、丸めない、関数の形、interface、名前、コメント、package の木、ツール）で書く・直す |
+| `apply-crosscutting-contracts` | トランザクション、ctx の executor、翻訳、時計、採番、分類の表を引く関数の契約を定める |
+| `handle-errors` | エラーを15の分類から定義し、運び、翻訳し、付け替え、応答の表と処理の表で扱う |
+| `write-logs` | ログレベルの意味と分類からの表、境界で一度だけ記録する場所、logger の注入、属性と秘匿 |
+| `apply-go-test-convention` | テストの共通の形（テーブル駆動、id / name / description、差し替えてよい境界、Builder、実 DB） |
 
-`develop-go-unit` は `playbook.yml` の `skill:` 工程で、層（`unit.layer`）に応じた同じ package の `test-*` → `implement-*` → `write-go-code`（必要なら `handle-errors` / `write-logs`）を順に呼びます。テストの規約と実装の規約は別 file のままです。
+層の順序とゲート、赤の定義、一つの単位の進め方は、`development-convention` の `develop-inside-out` が持ちます。
 
 ## 入力
 

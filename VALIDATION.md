@@ -14,25 +14,11 @@ bash scripts/validate.sh
 
 兄弟checkout `../harness-tools/tools/validate-plugin-repository.py`（保守toolの唯一の参照元）で、package 境界の契約（公開・インストール対象がpackage 1件であること、Codex / Claude manifest の同一性、manifestが宣言した直接公開skillの実在、symlink不在）を確認します。`../harness-tools/` が無い環境では検査を止めます（省略も fixture による代用もしません）。CI は `.github/workflows/validate.yml` で `harness-tools` を兄弟checkoutし、`harness-tools/ci/validate.sh` で local と同じ command を実行します。
 
-続けて、両 marketplace の identity（名前・version・source）が manifest と一致すること、manifest が `skills/` 配下の15skillを直接宣言すること、各directoryの`SKILL.md`とnameが一致することを確認します。各skill直下の`playbook.yml` v2についてidentity、宣言順、`agent_work: invoking_agent`、実値を宣言した場合のneeds/provides接続も正例・負例で確認します。存在確認だけのprepare、外側の単一routing、入口別manifestは検査対象にしません。
-
-## develop-go-unit（TDD の 1 単位）の工程順
-
-```text
-基準資料: manifest の skills（同 package の公開入口の集合）と、develop-go-unit の隣接 playbook.yml
-入力: plugins/go-convention/.claude-plugin/plugin.json、skills/develop-go-unit/playbook.yml
-正規化: playbook.yml は yq v4 で JSON 化し、steps を宣言順の list として読む
-合格述語: develop-go-unit が manifest にあり、`skill: test-*` の工程が全部 `id: run-red`（agent_work）より前、`skill: implement-*` の工程が全部 run-red と `id: run-green`（agent_work）の間、`skill: write-go-code` が run-green より後にある。test-* と implement-* の工程はどれも `when` を持ち、両者の `when` の集合が一致する。`skill:` の値はすべて manifest の公開入口で、`apply-go-test-convention` を呼ばない
-失敗時の診断: 欠けた工程、順序違反、層の不一致、公開入口でない skill 名
-正例: 現行の develop-go-unit
-反例: 実装工程がテスト工程より前、run-red の欠落、実装の層が一つ欠ける、apply-go-test-convention を合成入口から呼ぶ
-境界例: when の値が層の名前として正しいかは判定しない（両者の集合の一致だけを見る）
-意味評価として残す範囲: 赤の理由の分類が正しいか、実装中にテストを変えていないか、整える前後で振る舞いが同じか、層の対応が正しいか
-```
+続けて、両 marketplace の identity（名前・version・source）が manifest と一致すること、manifest が `skills/` 配下の9skillを直接宣言すること、各directoryの`SKILL.md`とnameが一致することを確認します。
 
 ## 規約の資料と例
 
-全skillについて、`SKILL.md` から `references/*.md` への直接リンクが過不足なく在ること、reference 間のリンク先が在ることを確認します。テストの形の skill については、`references/examples.md` と `tests/examples/` のテストコードの一致、`table.md` / `given.md` / `then.md` / `case-identity.md` の Go ブロックが `tests/examples/` の部分文字列であること、shell 構文を確認します。
+全skillについて、`SKILL.md` から `references/*.md` への直接リンクが過不足なく在ること、reference 間のリンク先が在ることを確認します。テストの形の skill については、`references/examples.md` と `tests/examples/` のテストコードの一致と、shell 構文を確認します。
 
 ## check-cases.py
 
@@ -79,7 +65,7 @@ bash scripts/validate.sh
 `plugins/go-convention/skills/apply-go-test-convention/scripts/check-bdd-coverage.py` は、資料の一つの BDD を repository 全体でちょうど一つのテストが名乗る、という規則の構造を検査します。
 
 ```text
-基準資料: bdd-discovery-and-formulation の write-bdd の「BDDの番号は資料の中で一意か」（見出しは `### [BDD-<3桁以上の連番>] <業務結果>`、資料の種類の接頭辞を足さない）、引数で渡した資料の見出し、apply-go-test-convention の references/case-identity.md の宣言と列挙の形
+基準資料: bdd-discovery-and-formulation の write-bdd の「BDDの番号は資料の中で一意か」（見出しは `### [BDD-<3桁以上の連番>] <業務結果>`、資料の種類の接頭辞を足さない）、引数で渡した資料の見出し、apply-go-test-convention の SKILL.md の「ケースの識別」の宣言と列挙の形
 入力: repository root 配下の全 *_test.go（.git と vendor を除く）と、引数の資料
 正規化: 資料の path は repository root からの相対 path にそろえる。`id:` 行は直後が `name:` のときだけケースと見なす
 合格述語: 各資料に見出しが1つ以上あり資料内で ID が重複しない。BDD の id か列挙を持つファイルは `// BDD の資料:` をちょうど1つ持ち、それが引数の資料である。その id と列挙の ID は宣言した資料にある。各資料の各 ID は、その資料を宣言したファイル全体で、id: か列挙のどちらかにちょうど1回現れる。列挙は1ファイルに1つで、最後にあり、各行に理由がある
