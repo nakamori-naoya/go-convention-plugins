@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// 業務知識の「拒むときの理由」に一つずつ対応する。
+// 業務知識の拒む理由に一つずつ対応する。
 var (
 	ErrUserHasOverdue   = errors.New("延滞の貸出がある利用者が本を借りる")
 	ErrLoanLimitReached = errors.New("貸出上限に達している利用者が本を借りる")

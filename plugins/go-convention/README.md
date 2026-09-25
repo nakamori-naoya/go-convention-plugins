@@ -29,7 +29,7 @@
 ## 入力
 
 - 対象のパッケージと、書く・直す対象（型・関数・RPC）
-- BDD 資料（domain-rule / domain-model / rdb-logical-data-modeling）があればその絶対パス
+- BDD 資料（business-knowledge / domain-model / command-data-model / query-data-model）があればその絶対パス
 - 既存のコード・テスト（あれば）
 - `references`: 追加で従う資料の絶対パス配列（任意）。プロジェクト固有の規約は対象 repository の AGENTS.md / CLAUDE.md と `references` で渡します
 

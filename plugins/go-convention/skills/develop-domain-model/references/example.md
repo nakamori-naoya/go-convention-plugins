@@ -9,7 +9,7 @@
 ```go
 package domain
 
-// 業務知識の「拒むときの理由」に一つずつ対応する。
+// 業務知識の拒む理由に一つずつ対応する。
 var (
 	ErrUserHasOverdue   = errors.Define(errors.ErrPrecondition, "延滞の貸出がある利用者が本を借りる")
 	ErrLoanLimitReached = errors.Define(errors.ErrPrecondition, "貸出上限に達している利用者が本を借りる")
@@ -163,7 +163,7 @@ type ReturnResult struct {
 	Event Returned
 }
 
-// Lent は「本が貸し出された」。貸出日時を持ち、それが出来事の時点になる。
+// Lent は「本を借りた」。貸出日時を持ち、それが出来事の時点になる。
 type Lent struct{ loan loanCore }
 
 func (e Lent) LoanID() LoanID   { return e.loan.id }
@@ -171,7 +171,7 @@ func (e Lent) Version() Version { return e.loan.version }
 func (e Lent) LentAt() LentAt   { return e.loan.lentAt }
 func (e Lent) Due() Due         { return e.loan.due } // 取り出しの関数は、読む呼び手がいるものだけ
 
-// Returned は「本が返却された」。業務の時刻を持たない。出来事の時点はリポジトリが記録のときに決める。
+// Returned は「本を返した」。業務の時刻を持たない。出来事の時点はリポジトリが記録のときに決める。
 type Returned struct{ loan loanCore }
 
 // MarkOverdueResult と、判定日時を持つイベント Overdue も同じ形である。
