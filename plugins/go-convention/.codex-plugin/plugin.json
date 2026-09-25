@@ -1,6 +1,6 @@
 {
   "name": "go-convention",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Go 1.27 のコーディング・ドメインモデル・永続化・usecase・handler・エラー・ログ・テストの規約と、TDD の一単位を仕上げる skill を配布する",
   "author": {
     "name": "NaoyaNakamori"
