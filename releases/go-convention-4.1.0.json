@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "plugin": "go-convention",
+  "version": "4.1.0",
+  "created_at": "2026-09-25T06:36:37.792593+00:00",
+  "notes": "テストの skill と develop-go-unit は TDD の赤の定義を持たず、development-convention の develop-inside-out に従う。見本は写す形と写さない題材を書き分け、題材の一時的な状態と作業の組織の語を消した。develop-go-unit は赤の分類、緑、停止のたびに途中の結果を伝える。",
+  "breaking": "なし（赤の判定は、まだ無い型や関数を呼ぶテストのビルド失敗を赤とする点で変わらない）",
+  "migration": "marketplace を update し plugin を再 install する。development-convention 4.1.0 と併せて導入する。",
+  "checks": {
+    "codex": {
+      "status": "manifest-and-contract-tests-passed",
+      "native-client-installation": "not-executed（merge 後に install-plugins.sh で導入）",
+      "evidence": "bash scripts/validate.sh: exit 0 (Validation: passed)"
+    },
+    "claude": {
+      "status": "manifest-and-contract-tests-passed",
+      "native-client-installation": "not-executed（merge 後に install-plugins.sh で導入）",
+      "evidence": "bash scripts/validate.sh: exit 0 (Validation: passed)"
+    },
+    "root-validation": "root scripts/validate.sh go-convention-plugins: Root validation: passed"
+  },
+  "files": [
+    ".agents/plugins/marketplace.json",
+    "plugins/go-convention/.codex-plugin/plugin.json",
+    ".claude-plugin/marketplace.json",
+    "plugins/go-convention/.claude-plugin/plugin.json"
+  ]
+}
