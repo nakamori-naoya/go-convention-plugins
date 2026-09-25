@@ -9,7 +9,7 @@
       "name": "go-convention",
       "source": "./plugins/go-convention",
       "description": "Go の package 配置、コーディング、ドメインモデル、永続化、usecase、handler、エラー、ログ、テストの14の規約と、TDD の一単位を仕上げる1つの skill を提供する",
-      "version": "4.1.0"
+      "version": "5.0.0"
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "name": "go-convention",
-  "version": "4.1.0",
+  "version": "5.0.0",
   "description": "Go 1.27 のドメイン、永続化、usecase、入口の層ごとの実装とテスト（TDD の一単位）と、言語、エラー、ログ、テストの共通の形、横断的関心事の契約の規約を配布する",
   "author": {
     "name": "NaoyaNakamori"
