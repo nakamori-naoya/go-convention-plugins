@@ -54,7 +54,7 @@ python3 scripts/check-cases.py <テストのあるディレクトリ>
 python3 scripts/check-bdd-coverage.py <repository root> <資料.md>...
 ```
 
-二つの tool はこの `SKILL.md` の隣の `scripts/` にあり、違反があれば終了コード 1、入力が無ければ 2 を返す。`check-cases.py` はテストの形を、`check-bdd-coverage.py` は資料の各 BDD が repository 全体でちょうど一回名乗られていることを判定する。どのテストが主に担うべきか、差し替えが三つの境界だけかは、読んで確かめる。
+二つの tool はこの `SKILL.md` の隣の `scripts/` にあり、違反があれば終了コード 1、入力が無ければ 2 を返す。`check-cases.py` はテストの形を、`check-bdd-coverage.py` は資料の各 BDD が repository 全体でちょうど一回名乗られていることを判定する。どのテストが主に担うべきか、差し替えが testing-strategy の原則に沿うかは、読んで確かめる。
 
 ## 止まるとき
 
