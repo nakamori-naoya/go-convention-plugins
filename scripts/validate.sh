@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Scenario: go-conventionが15の自己完結skill（規約14＋TDDの1単位の入口1）を直接配布でき、テストの形の例がコンパイルして通る
-# Given: 両runtimeのmarketplaceと同一のmanifest、直接公開する15のskill（skills/<name>）、
+# Scenario: go-conventionが9の自己完結skill（層の4と横断の5）を直接配布でき、テストの形の例がコンパイルして通る
+# Given: 両runtimeのmarketplaceと同一のmanifest、直接公開する9のskill（skills/<name>）、
 #        各skillのreference、check-cases.py、tests/examplesのGoモジュールがある
 # When: root契約（package境界・内部skillの自己完結）、identity、入口と内部skillの対応、reference到達性、例と断片の一致、
-#       check-cases.pyの正常系・正例・負例、check-bdd-coverage.pyの正例・反例・境界例、develop-go-unitのTDD工程順、shell構文、goのgofmt・vet・shuffleテストを実行する
+#       check-cases.pyの正常系・正例・負例、check-bdd-coverage.pyの正例・反例・境界例、shell構文、goのgofmt・vet・shuffleテストを実行する
 # Then: 不整合が一つでもあれば非0で終了する。兄弟checkout harness-tools が無ければ止まる。goが無ければgofmt・vet・testは省略と表示し失敗にしない
 set -uo pipefail
 
@@ -52,16 +52,10 @@ else
 fi
 
 if cmp -s "$PLUGIN/.claude-plugin/plugin.json" "$PLUGIN/.codex-plugin/plugin.json" \
-  && jq -e '.name=="go-convention" and (.metadata.harness|has("playbooks")|not) and (.metadata.harness|has("internalPlugins")|not) and (.skills|length)==15 and all(.skills[]; startswith("./skills/"))' "$PLUGIN/.claude-plugin/plugin.json" >/dev/null; then
-  pass "runtime manifestが同一で、15の自己完結skillを直接宣言"
+  && jq -e '.name=="go-convention" and (.metadata.harness|has("playbooks")|not) and (.metadata.harness|has("internalPlugins")|not) and (.skills|length)==9 and all(.skills[]; startswith("./skills/"))' "$PLUGIN/.claude-plugin/plugin.json" >/dev/null; then
+  pass "runtime manifestが同一で、9の自己完結skillを直接宣言"
 else
   fail "runtime manifestの同一性または入口の宣言"
-fi
-
-if PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/scripts/validate_skill_playbooks.py" "$PLUGIN" --self-test; then
-  pass "15公開skillのplaybook.yml v2工程順序契約"
-else
-  fail "15公開skillのplaybook.yml v2工程順序契約"
 fi
 
 entry_failed=0
@@ -72,8 +66,8 @@ while IFS= read -r name; do
   done
   [ "$(skill_name "$entry/SKILL.md" 2>/dev/null)" = "$name" ] || { echo "SKILL.md frontmatter nameがdirectoryと一致しない: $name"; entry_failed=1; }
 done < <(jq -r '.skills[] | split("/")[-1]' "$PLUGIN/.claude-plugin/plugin.json")
-[ "$(find "$PLUGIN/skills" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = "15" ] || { echo "公開skillのdirectoryが15でない"; entry_failed=1; }
-[ "$entry_failed" -eq 0 ] && pass "15の自己完結skillを直接公開" || fail "直接公開skillの対応"
+[ "$(find "$PLUGIN/skills" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = "9" ] || { echo "公開skillのdirectoryが9でない"; entry_failed=1; }
+[ "$entry_failed" -eq 0 ] && pass "9の自己完結skillを直接公開" || fail "直接公開skillの対応"
 
 FRONTMATTER_CASES="$TMP_ROOT/frontmatter-cases"
 mkdir -p "$FRONTMATTER_CASES"
@@ -134,32 +128,6 @@ then
   pass "examples.mdのテストコードはtests/examplesと一致"
 else
   fail "examples.mdのテストコードがtests/examplesと不一致"
-fi
-
-if python3 - "$SKILL/references" "$EXAMPLES" <<'PY'
-from pathlib import Path
-import re
-import sys
-
-refs = Path(sys.argv[1])
-sources = [p.read_text() for p in sorted(Path(sys.argv[2]).glob("*/*_test.go"))]
-bad = []
-for name in ("table.md", "given.md", "then.md", "case-identity.md"):
-    doc = (refs / name).read_text()
-    blocks = re.findall(r"```go\n(.*?)```", doc, re.S)
-    if not blocks:
-        bad.append(f"{name}: go ブロックが無い")
-    for block in blocks:
-        if not any(block in src for src in sources):
-            bad.append(f"{name}: tests/examples に無い断片: {block.splitlines()[0]!r}")
-if bad:
-    print("\n".join(bad))
-    raise SystemExit(1)
-PY
-then
-  pass "table.md/given.md/then.md/case-identity.mdのgoブロックはtests/examplesの部分文字列"
-else
-  fail "table.md/given.md/then.md/case-identity.mdにtests/examplesに無いgoブロックがある"
 fi
 
 CHECK_CASES="$SKILL/scripts/check-cases.py"
@@ -370,75 +338,6 @@ bdd_mutated "理由の無い列挙" unowned-without-reason reject "理由が無�
 bdd_mutated "最後に無い列挙" unowned-not-last reject "ファイルの最後に置く"
 bdd_mutated "資料の種類の接頭辞を足した ID" prefixed-id reject "BDD-<3桁以上の連番>"
 bdd_mutated "どのテストも担わない BDD の列挙（境界例）" unowned-listed accept
-
-# develop-go-unit（TDDの1単位）: 同packageの公開入口を skill: で、テスト → 赤 → 実装 → 緑 → 整える の順に呼ぶ
-tdd_order_check() {
-  python3 - "$1" <<'PY3'
-import json, subprocess, sys
-from pathlib import Path
-
-plugin = Path(sys.argv[1])
-manifest = json.loads((plugin / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))
-public = {Path(s).name for s in manifest["skills"]}
-bad = []
-name = "develop-go-unit"
-if name not in public:
-    bad.append("develop-go-unit の入口が manifest に無い")
-else:
-    raw = subprocess.run(["yq", "-o=json", "-I=0", ".", str(plugin / "skills" / name / "playbook.yml")], text=True, capture_output=True)
-    if raw.returncode:
-        bad.append("develop-go-unit: playbook.yml を読めない")
-    else:
-        steps = json.loads(raw.stdout)["steps"]
-        tests = [i for i, s in enumerate(steps) if isinstance(s.get("skill"), str) and s["skill"].startswith("test-")]
-        impls = [i for i, s in enumerate(steps) if isinstance(s.get("skill"), str) and s["skill"].startswith("implement-")]
-        red = next((i for i, s in enumerate(steps) if s.get("id") == "run-red" and s.get("agent_work") == "invoking_agent"), None)
-        green = next((i for i, s in enumerate(steps) if s.get("id") == "run-green" and s.get("agent_work") == "invoking_agent"), None)
-        refactor = next((i for i, s in enumerate(steps) if s.get("skill") == "write-go-code"), None)
-        if not tests or not impls or None in (red, green, refactor):
-            bad.append("develop-go-unit: test-* / run-red / implement-* / run-green / write-go-code の工程が揃っていない")
-        elif not (max(tests) < red < min(impls) and max(impls) < green < refactor):
-            bad.append("develop-go-unit: 工程順が テスト → 赤 → 実装 → 緑 → 整える でない")
-        layers_test = {steps[i].get("when") for i in tests}
-        layers_impl = {steps[i].get("when") for i in impls}
-        if None in layers_test or None in layers_impl:
-            bad.append("develop-go-unit: テストと実装の工程は、どれも unit.layer の when を持つ")
-        elif layers_test != layers_impl:
-            bad.append(f"develop-go-unit: テストと実装の層が一致しない: {sorted(layers_test ^ layers_impl)}")
-        for s in steps:
-            if "skill" in s and s["skill"] not in public:
-                bad.append(f"develop-go-unit: skill: {s['skill']} は同packageの公開入口でない")
-            if s.get("skill") == "apply-go-test-convention":
-                bad.append("develop-go-unit: テストの形の共通規約は test-* が土台にするので合成入口から呼ばない")
-if bad:
-    print("\n".join(bad)); raise SystemExit(1)
-PY3
-}
-if tdd_order_check "$PLUGIN"; then
-  pass "develop-go-unit: test-* → run-red → implement-* → run-green → write-go-code の順で、層ごとの when を持つ同package公開入口を skill: で呼ぶ"
-else
-  fail "develop-go-unit のTDD工程順"
-fi
-TDD_MUT="$TMP_ROOT/tdd-mut"
-tdd_mutated() {
-  local label=$1 expect=$2 py=$3
-  rm -rf "$TDD_MUT"; mkdir -p "$TDD_MUT"; cp -R "$PLUGIN/." "$TDD_MUT/"
-  python3 -c "$py" "$TDD_MUT/skills/develop-go-unit/playbook.yml"
-  if tdd_order_check "$TDD_MUT" >/dev/null 2>&1; then
-    [ "$expect" = accept ] && pass "develop-go-unit 検査が${label}を受理" || fail "develop-go-unit 検査が${label}を受理した"
-  else
-    [ "$expect" = reject ] && pass "develop-go-unit 検査が${label}を拒否" || fail "develop-go-unit 検査が${label}を拒否した"
-  fi
-}
-tdd_mutated "現行の develop-go-unit（正例）" accept 'import sys'
-tdd_mutated "実装工程がテスト工程より前（反例）" reject 'import sys,pathlib
-p=pathlib.Path(sys.argv[1]); t=p.read_text(); a="skill: test-domain-model"; b="skill: implement-domain-model"; p.write_text(t.replace(a,"@@").replace(b,a).replace("@@",b))'
-tdd_mutated "run-red 工程の欠落（反例）" reject 'import sys,pathlib
-p=pathlib.Path(sys.argv[1]); t=p.read_text(); p.write_text(t.replace("id: run-red","id: run-first"))'
-tdd_mutated "実装の層が一つ欠ける（反例）" reject 'import sys,pathlib
-p=pathlib.Path(sys.argv[1]); t=p.read_text(); p.write_text(t.replace("    when: unit.layer == handler\n    purpose: \"入口（RPC、受信境界、巡回）を、","    when: unit.layer == gateway\n    purpose: \"入口（RPC、受信境界、巡回）を、"))'
-tdd_mutated "テストの形の共通規約を合成入口から呼ぶ（反例）" reject 'import sys,pathlib
-p=pathlib.Path(sys.argv[1]); t=p.read_text(); p.write_text(t.replace("skill: write-go-code","skill: apply-go-test-convention"))'
 
 syntax_failed=0
 while IFS= read -r script; do bash -n "$script" || syntax_failed=1; done < <(find "$ROOT/plugins" "$ROOT/scripts" -type f -name '*.sh' | sort)
