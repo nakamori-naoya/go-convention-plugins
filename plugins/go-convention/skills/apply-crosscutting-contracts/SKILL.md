@@ -29,7 +29,7 @@ type Options struct {
 
 `Run` は張ったトランザクションを `rdb.WithExecutor` で ctx に載せて fn を呼び、nil なら確定する。エラーか panic なら取り消し、panic はそのまま伝え、取り消しの失敗は戻り値に載せずに注入された logger で記録する。確定を送った後に応答を受けずに接続が切れたか期限が切れたときは、確定したか分からないので「回復不能」を返す。再処理させると二重に成立しうるからである。
 
-`RetryOn` に当たる失敗は、`MaxRetries` まで fn を最初から呼び直す。だから fn の中で採番せず、外部との通信もしない。採番は呼び直しで別の値になり、外部への通信は取り消せないからである。usecase にやり直しのループを書かない。
+`RetryOn` に当たる失敗は、`MaxRetries` まで fn を最初から呼び直す。だから fn の中で ID を発行せず、外部との通信もしない。発行した ID は呼び直しで別の値になり、外部への通信は取り消せないからである。usecase にやり直しのループを書かない。
 
 ## ctx が運ぶトランザクション：`rdb.Executor`
 
@@ -63,7 +63,7 @@ func Translate(ctx context.Context, err error, constraints Constraints) error
 
 pgx を呼んだ場所は、返ったエラーを必ず `Translate` に通す。`Translate` は handle-errors の PostgreSQL の翻訳表で分類へ写し、分類を外側、元のエラーを内側に包む。分類済みのエラーと ctx の中断と期限切れは包み直さない。制約の違反（一意、外部キー、CHECK）は `constraints` で具体エラーへ写し、載っていなければ分類不能にする。表に無いエラーは変えずに返し、どの分類にも丸めない。境界が分類不能として記録するので、それを見て表に足す。ctx は、呼び出し側の都合か依存先の不調かを見分けるためだけに使う。入力の値を含みうる文言（Detail、Hint）は落としてから連鎖に残す。
 
-## 時計と採番器：`clock.Clock` と `idgen.Generator`
+## 時計と ID ジェネレーター：`clock.Clock` と `idgen.Generator`
 
 ```go
 package clock
@@ -85,7 +85,7 @@ type Generator interface {
 }
 ```
 
-どちらも差し替えるためだけにある技術の境界なので、interface はここに一つだけ置き、mock はここの `mock/` に生成し、使う側で切り直さない。採番器は識別子の種類ごとに増やさず、使う側がその場で識別子の値オブジェクトへ変換する。`time.Now()` を本文で直接呼ばない。誰がいつ時刻を取り採番するかは、development-convention の `apply-layer-convention` が決めている。
+どちらも差し替えるためだけにある技術の境界なので、interface はここに一つだけ置き、mock はここの `mock/` に生成し、使う側で切り直さない。ID ジェネレーターは識別子の種類ごとに増やさず、使う側がその場で識別子の値オブジェクトへ変換する。`time.Now()` を本文で直接呼ばない。誰がいつ時刻を取り ID を発行するかは、development-convention の `apply-layer-convention` が決めている。
 
 ## 分類の表を引く関数：`errors.HandlingOf` と `log.Level`
 

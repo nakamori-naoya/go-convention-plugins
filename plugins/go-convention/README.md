@@ -19,7 +19,7 @@
 | `develop-usecase` | command、単純なパターンの手順、query の usecase と、配線と境界を確かめるテストを書く |
 | `develop-handler` | Connect-RPC の入口、interceptor、組み立てと、本番の組み立てを通す API のテストを書く |
 | `write-go-code` | 言語の規約（型で業務を運ぶ、丸めない、関数の形、interface、名前、コメント、package の木、ツール）で書く・直す |
-| `apply-crosscutting-contracts` | トランザクション、ctx の executor、翻訳、時計、採番、分類の表を引く関数の契約を定める |
+| `apply-crosscutting-contracts` | トランザクション、ctx の executor、翻訳、時計、ID ジェネレーター、分類の表を引く関数の契約を定める |
 | `handle-errors` | エラーを15の分類から定義し、運び、翻訳し、付け替え、応答の表と処理の表で扱う |
 | `write-logs` | ログレベルの意味と分類からの表、境界で一度だけ記録する場所、logger の注入、属性と秘匿 |
 | `apply-go-test-convention` | テストの共通の形（テーブル駆動、id / name / description、差し替えてよい境界、Builder、実 DB） |
