@@ -52,7 +52,7 @@ go tool golangci-lint run ./...
 go test -count=1 ./<usecase package>/...
 ```
 
-usecase の package が pgx、sqlc の生成型、connect、proto を import していないことと、command の package が読み取りの package を import していないことも確かめる。
+usecase の本番のコード（`_test.go` を除く）が pgx、sqlc の生成型、connect、proto を import していないことと、command の package が読み取りの package を import していないことも確かめる。
 
 ## 止まるとき
 

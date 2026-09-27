@@ -9,15 +9,20 @@
   3. 宣言したファイルの `BDD-` の id と列挙の ID は、`BDD-<3桁以上の連番>` の形で、宣言した資料の見出しにある
   4. 各資料の各 BDD ID は、その資料を宣言したファイル全体を通して、`id:` の値か列挙のどちらか一方に、ちょうど 1 回現れる
   5. 列挙は 1 ファイルに 1 つで、ファイルの最後にあり、各行は `// <ID> <理由>` の形で理由が空でない
+  6. `--stopped` の一覧に載せた BDD（作業を止めた BDD）は、4 の数え方から外す。一覧の各行は
+     `<資料の repository 相対 path> <BDD-ID> <理由と返し先>` の形で、資料は引数の資料のどれか、ID はその資料の見出しにあり、
+     理由が空でなく、一覧の中で重複せず、どのテストの `id:` にも列挙にも現れない。止めた BDD は違反とせず、一覧として出す
 
 読み方:
   - `id:` 行をケースと見なすのは、直後の行が `name:` で始まるときだけ（被験体の構造体リテラルの id は見ない）
   - 走査するのは repository root 配下の *_test.go 全部（`.git` と `vendor` を除く）
   - 資料の path は repository root からの相対 path に正規化して比べる
+  - 止めた BDD の一覧は、空行と `#` で始まる行を読まない。一覧の path は、絶対 path か repository root からの相対 path
 
-使い方: check-bdd-coverage.py <repository root> <資料.md> [<資料.md> ...]
+使い方: check-bdd-coverage.py [--stopped <止めた BDD の一覧>] <repository root> <資料.md> [<資料.md> ...]
 違反があれば `内容` を 1 行ずつ stdout に出して終了コード 1。
-資料が無い、見出しが無い、*_test.go が 1 つも無ければ stderr に理由を出して終了コード 2。違反が無ければ終了コード 0。
+資料か一覧が無い、見出しが無い、*_test.go が 1 つも無ければ stderr に理由を出して終了コード 2。違反が無ければ終了コード 0。
+止めた BDD は、違反が無くても `止めた BDD:` の行として stdout に出す。止めた範囲があっても本当の漏れと区別できるようにするためである。
 """
 
 from __future__ import annotations
@@ -85,9 +90,38 @@ def unowned(path: str, lines: list[str]) -> tuple[list[tuple[int, str]], list[st
     return found, problems
 
 
+def stopped_entries(path: Path, docs: dict[str, list[str]]) -> tuple[dict[tuple[str, str], str], list[str]]:
+    entries: dict[tuple[str, str], str] = {}
+    problems: list[str] = []
+    keys = sorted(docs, key=len, reverse=True)
+    for n, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        where = f"{path.name}:{n}"
+        doc = next((k for k in keys if line.startswith(k) and line[len(k):len(k) + 1].isspace()), None)
+        if doc is None:
+            problems.append(f"{where}: 止めた BDD の資料が引数の資料に無い（`<資料の path> <BDD-ID> <理由と返し先>` の形）")
+            continue
+        rest = line[len(doc):].strip().split(maxsplit=1)
+        bdd_id, reason = rest[0], (rest[1].strip() if len(rest) > 1 else "")
+        if not ID_VALUE_RE.match(bdd_id) or bdd_id not in docs[doc]:
+            problems.append(f"{where}: {bdd_id} は資料 {doc} の見出しに無い")
+            continue
+        if not reason:
+            problems.append(f"{where}: 止めた {bdd_id} に理由が無い")
+        if (doc, bdd_id) in entries:
+            problems.append(f"{where}: 止めた {bdd_id} が一覧の中で重複している")
+        entries[(doc, bdd_id)] = reason
+    return entries, problems
+
+
 def main(argv: list[str]) -> int:
+    stopped_arg = None
+    if len(argv) > 2 and argv[1] == "--stopped":
+        stopped_arg, argv = argv[2], [argv[0]] + argv[3:]
     if len(argv) < 3:
-        print("usage: check-bdd-coverage.py <repository root> <資料.md> [<資料.md> ...]", file=sys.stderr)
+        print("usage: check-bdd-coverage.py [--stopped <止めた BDD の一覧>] <repository root> <資料.md> [<資料.md> ...]", file=sys.stderr)
         return 2
     root = Path(argv[1])
     if not root.is_dir():
@@ -112,6 +146,15 @@ def main(argv: list[str]) -> int:
                 problems.append(f"{key}: 見出しの {bdd_id} が資料の中で重複している")
             seen.add(bdd_id)
         docs[key] = ids
+
+    stopped: dict[tuple[str, str], str] = {}
+    if stopped_arg is not None:
+        stopped_path = Path(stopped_arg) if Path(stopped_arg).is_absolute() else root / stopped_arg
+        if not stopped_path.is_file():
+            print(f"{stopped_arg}: 止めた BDD の一覧が無い", file=sys.stderr)
+            return 2
+        stopped, stopped_problems = stopped_entries(stopped_path, docs)
+        problems.extend(stopped_problems)
 
     files = test_files(root)
     if not files:
@@ -160,6 +203,10 @@ def main(argv: list[str]) -> int:
     for doc, ids in docs.items():
         for bdd_id in ids:
             places = occurrences.get((doc, bdd_id), [])
+            if (doc, bdd_id) in stopped:
+                if places:
+                    problems.append(f"{doc} の {bdd_id}: 止めた BDD の一覧にあるのに、テストに現れる: {', '.join(places)}")
+                continue
             if not places:
                 problems.append(f"{doc} の {bdd_id}: どのテストの id: にも、どのテストも担わない BDD の列挙にも無い")
             elif len(places) > 1:
@@ -169,9 +216,11 @@ def main(argv: list[str]) -> int:
 
     for p in problems:
         print(p)
+    for (doc, bdd_id), reason in stopped.items():
+        print(f"止めた BDD: {doc} の {bdd_id}: {reason}")
     if problems:
         return 1
-    print(f"check-bdd-coverage: 資料 {len(docs)} 本の BDD {counted} 件が、それぞれちょうど 1 回現れる。違反なし")
+    print(f"check-bdd-coverage: 資料 {len(docs)} 本の BDD {counted} 件が、それぞれちょうど 1 回現れる。止めた BDD {len(stopped)} 件。違反なし")
     return 0
 
 

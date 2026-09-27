@@ -11,7 +11,7 @@ var ErrStoredLoanCorrupted = errors.Define(errors.ErrInternal, "保存された�
 // ErrLoanVersionConflict は、同じ貸出の同じ版が先に記録されたことを表す。
 var ErrLoanVersionConflict = errors.Define(errors.ErrConflict, "貸出が先に更新された")
 
-// loanConstraints は、物理設計の一意制約の名前から具体エラーへの対応である。
+// loanConstraints は、物理設計の制約の名前から、物理設計が決めた業務の結果の具体エラーへの対応である。
 var loanConstraints = rdb.Constraints{
 	"loans_book_active_key":             domain.ErrBookOnLoan,
 	"loan_base_events_loan_version_key": ErrLoanVersionConflict,
@@ -38,7 +38,7 @@ func (r *LoanRepository) FindPendingLoan(ctx context.Context, user vo.UserNo, bo
 	}
 	lent, err := domain.NewLentCount(int(row.ActiveCount))
 	if err != nil {
-		return domain.PendingLoan{}, fmt.Errorf("%w: 利用者 %s の借りている冊数: %v", ErrStoredLoanCorrupted, user.Value(), err)
+		return domain.PendingLoan{}, fmt.Errorf("%w: 利用者 %s の借りている冊数: %s", ErrStoredLoanCorrupted, user.Value(), err.Error())
 	}
 	overdue := domain.NoOverdue
 	if row.HasOverdue {
@@ -142,7 +142,13 @@ SELECT * FROM loan_base_events ORDER BY event_id;
 SELECT * FROM loan_returned_events ORDER BY event_id;
 ```
 
-資料の After の表は、生成された行の型でケースに写す。
+資料の After の表は、生成された行の型でケースに写す。資料の識別子は、表の前で一度だけ変換しておく。
+
+```go
+// 資料の L-001。固定の UUID の文字列を、表の前で値オブジェクトと行の型へ一度ずつ変換する。
+loanID := domain.NewLoanIDFromUUID(uuid.MustParse(loanL001))
+rowL001 := rdb.UUIDColumn(loanID.Value())
+```
 
 ```go
 wantLoans: []testsqlcgen.Loan{
@@ -164,7 +170,7 @@ for _, tt := range tests { // 同じ実 DB を全ケースが共有するため�
 		unchanged := dbassert.CountRowsExcept(t, suite.Reader, "loans", "loan_base_events", "loan_returned_events")
 
 		err := txm.Run(ctx, tx.Options{Isolation: tx.ReadCommitted}, func(ctx context.Context) error { // 本番と同じトランザクションの管理
-			loan, err := repo.FindLoan(ctx, loanL001)
+			loan, err := repo.FindLoan(ctx, loanID)
 			require.NoError(t, err)
 			res, err := loan.Return()
 			require.NoError(t, err)
@@ -187,4 +193,4 @@ for _, tt := range tests { // 同じ実 DB を全ケースが共有するため�
 }
 ```
 
-`rowL001` は、資料の `L-001` に対応させた固定の UUID を行の列の型にしたものである。`suite.Reader` は時刻の列を UTC で読むように組んであるので、期待の時刻も UTC で書けば行の型のまま比べられる。同じ本を二人が同時に借りる BDD は、二つのトランザクションでそれぞれ `FindPendingLoan` まで進め、一つ目の `ApplyLent` を確定させた後に二つ目の `ApplyLent` を呼び、`domain.ErrBookOnLoan` と、貸出の行が一行だけであることを確かめる。
+`loanL001` はファイルスコープの `const`（`"0193a3c1-7a4e-7c2e-9f10-5b8d2e6a4f01"`）で、変換はテスト関数の中で一度だけ行うので、helper 関数も、同じ変換を繰り返す無名関数も要らない。`suite.Reader` は時刻の列を UTC で読むように組んであるので、期待の時刻も UTC で書けば行の型のまま比べられる。同じ本を二人が同時に借りる BDD は、二つのトランザクションでそれぞれ `FindPendingLoan` まで進め、一つ目の `ApplyLent` を確定させた後に二つ目の `ApplyLent` を呼び、`domain.ErrBookOnLoan` と、貸出の行が一行だけであることを確かめる。
