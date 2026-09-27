@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Scenario: go-conventionが9の自己完結skill（層の4と横断の5）を直接配布でき、テストの形の例がコンパイルして通る
-# Given: 両runtimeのmarketplaceと同一のmanifest、直接公開する9のskill（skills/<name>）、
-#        各skillのreference、check-cases.py、tests/examplesのGoモジュールがある
-# When: root契約（package境界・内部skillの自己完結）、identity、入口と内部skillの対応、reference到達性、例と断片の一致、
+# Scenario: go-conventionの各skillのreferenceが入口から届き、テストの形の例がコンパイルして通る
+# Given: 各skillのreference、check-cases.py、check-bdd-coverage.py、tests/examplesのGoモジュールがある
+# When: root契約（harness-tools）、reference到達性、例と断片の一致、
 #       check-cases.pyの正常系・正例・負例、check-bdd-coverage.pyの正例・反例・境界例、shell構文、goのgofmt・vet・shuffleテストを実行する
 # Then: 不整合が一つでもあれば非0で終了する。兄弟checkout harness-tools が無ければ止まる。goが無ければgofmt・vet・testは省略と表示し失敗にしない
 set -uo pipefail
@@ -17,21 +16,6 @@ passed=0 failed=0 skipped=0
 pass() { printf 'PASS: %s\n' "$1"; passed=$((passed + 1)); }
 fail() { printf 'FAIL: %s\n' "$1"; failed=$((failed + 1)); }
 skip() { printf 'SKIP: %s\n' "$1"; skipped=$((skipped + 1)); }
-skill_name() {
-  python3 - "$1" <<'PY' | yq -er '.name'
-from pathlib import Path
-import sys
-
-lines = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
-if not lines or lines[0] != "---":
-    raise SystemExit(2)
-try:
-    end = lines.index("---", 1)
-except ValueError:
-    raise SystemExit(2)
-print("\n".join(lines[1:end]))
-PY
-}
 
 for cmd in bash find jq python3 rg; do
   command -v "$cmd" >/dev/null 2>&1 && pass "command $cmd" || fail "command $cmd が無い"
@@ -41,44 +25,6 @@ done
 TOOLS="$ROOT/../harness-tools/tools"
 [ -d "$TOOLS" ] || { echo "[error] 兄弟 checkout harness-tools が無い: $TOOLS" >&2; exit 2; }
 python3 "$TOOLS/validate-plugin-repository.py" "$ROOT" >"$TMP_ROOT/root-contract.out" 2>&1 && pass "root契約（package境界・内部skillの自己完結）" || { cat "$TMP_ROOT/root-contract.out"; fail "root契約（package境界・内部skillの自己完結）"; }
-
-VERSION=$(jq -er '.version' "$PLUGIN/.claude-plugin/plugin.json") || VERSION=""
-if [ -n "$VERSION" ] \
-  && jq -e --arg v "$VERSION" '.name=="go-convention" and (.plugins|length==1) and .plugins[0].name=="go-convention" and .plugins[0].version==$v and .plugins[0].source.path=="./plugins/go-convention"' "$ROOT/.agents/plugins/marketplace.json" >/dev/null \
-  && jq -e --arg v "$VERSION" '.name=="go-convention" and (.plugins|length==1) and .plugins[0].name=="go-convention" and .plugins[0].version==$v and .plugins[0].source=="./plugins/go-convention"' "$ROOT/.claude-plugin/marketplace.json" >/dev/null; then
-  pass "marketplace identity（go-convention ${VERSION}）"
-else
-  fail "marketplace identity"
-fi
-
-if cmp -s "$PLUGIN/.claude-plugin/plugin.json" "$PLUGIN/.codex-plugin/plugin.json" \
-  && jq -e '.name=="go-convention" and (.metadata.harness|has("playbooks")|not) and (.metadata.harness|has("internalPlugins")|not) and (.skills|length)==9 and all(.skills[]; startswith("./skills/"))' "$PLUGIN/.claude-plugin/plugin.json" >/dev/null; then
-  pass "runtime manifestが同一で、9の自己完結skillを直接宣言"
-else
-  fail "runtime manifestの同一性または入口の宣言"
-fi
-
-entry_failed=0
-while IFS= read -r name; do
-  entry="$PLUGIN/skills/$name"
-  for f in "$entry/SKILL.md"; do
-    [ -f "$f" ] || { echo "無い: $f"; entry_failed=1; }
-  done
-  [ "$(skill_name "$entry/SKILL.md" 2>/dev/null)" = "$name" ] || { echo "SKILL.md frontmatter nameがdirectoryと一致しない: $name"; entry_failed=1; }
-done < <(jq -r '.skills[] | split("/")[-1]' "$PLUGIN/.claude-plugin/plugin.json")
-[ "$(find "$PLUGIN/skills" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" = "9" ] || { echo "公開skillのdirectoryが9でない"; entry_failed=1; }
-[ "$entry_failed" -eq 0 ] && pass "9の自己完結skillを直接公開" || fail "直接公開skillの対応"
-
-FRONTMATTER_CASES="$TMP_ROOT/frontmatter-cases"
-mkdir -p "$FRONTMATTER_CASES"
-printf '%s\n' '---' 'name: write-go-code # 公開identity' 'description: comment付き' '---' '# 本文' >"$FRONTMATTER_CASES/comment.md"
-printf '%s\n' '---' 'name: "write-go-code"' 'description: quoted' '---' '# 本文' >"$FRONTMATTER_CASES/quoted.md"
-printf '%s\n' '---' 'description: 本文だけにname' '---' '# 本文' 'name: write-go-code' >"$FRONTMATTER_CASES/body-only.md"
-printf '%s\n' '---' 'description: nameなし' '---' '# 本文' >"$FRONTMATTER_CASES/missing.md"
-[ "$(skill_name "$FRONTMATTER_CASES/comment.md" 2>/dev/null)" = "write-go-code" ] && pass "frontmatter nameのYAML commentを受理" || fail "frontmatter nameのYAML comment"
-[ "$(skill_name "$FRONTMATTER_CASES/quoted.md" 2>/dev/null)" = "write-go-code" ] && pass "frontmatter nameのquoted scalarを受理" || fail "frontmatter nameのquoted scalar"
-skill_name "$FRONTMATTER_CASES/body-only.md" >/dev/null 2>&1 && fail "本文だけの偽nameを受理" || pass "本文だけの偽nameを拒否"
-skill_name "$FRONTMATTER_CASES/missing.md" >/dev/null 2>&1 && fail "frontmatter name欠落を受理" || pass "frontmatter name欠落を拒否"
 
 # 全内部skill: SKILL.md から references を全部直接リンクし、reference 間のリンク先が在る
 if python3 - "$PLUGIN/skills" <<'PY2'
