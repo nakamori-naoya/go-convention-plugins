@@ -13,7 +13,7 @@ package domain
 var (
 	ErrUserHasOverdue   = errors.Define(errors.ErrPrecondition, "延滞の貸出がある利用者が本を借りる")
 	ErrLoanLimitReached = errors.Define(errors.ErrPrecondition, "貸出上限に達している利用者が本を借りる")
-	ErrBookOnLoan       = errors.Define(errors.ErrPrecondition, "貸出中の本を借りる") // DB の制約が守り、リポジトリが翻訳する
+	ErrBookOnLoan       = errors.Define(errors.ErrPrecondition, "貸出中の本を借りる")
 	ErrAlreadyReturned  = errors.Define(errors.ErrPrecondition, "返却済みの本を返す")
 	ErrNotPastDue       = errors.Define(errors.ErrPrecondition, "返却期限を過ぎていない貸出を延滞にする")
 )
@@ -39,8 +39,7 @@ var FirstVersion = Version{n: 1}
 
 func (v Version) Next() Version { return Version{n: v.n + 1} }
 
-// LibraryCalendar は、図書館のタイムゾーンで時点を暦の日へ変える。組み立ての場所が設定（例: "Asia/Tokyo"）から
-// NewLibraryCalendar で一度だけ作り、知らない名前は ErrTimeZoneUnknown で拒む。
+// LibraryCalendar は、図書館のタイムゾーン（例: "Asia/Tokyo"）で時点を暦の日へ変える。知らない名前のタイムゾーンでは作れない（ErrTimeZoneUnknown）。
 type LibraryCalendar struct{ loc *time.Location }
 
 // LentAt は、貸出日時である。返却期限の起点になる。
@@ -126,7 +125,7 @@ func (l OnLoan) Return() (ReturnResult, error)      { return l.returnLoan(), nil
 func (l OverdueLoan) Return() (ReturnResult, error) { return l.returnLoan(), nil }
 func (ReturnedLoan) Return() (ReturnResult, error)  { return ReturnResult{}, ErrAlreadyReturned }
 
-// MarkOverdue は「延滞にする」。延滞と返却済みが受けたときの拒む理由を資料が持たないので、和型に置かない。
+// MarkOverdue は「延滞にする」。返却期限を過ぎていない貸出は延滞にしない。
 func (l OnLoan) MarkOverdue(checked CheckedAt, cal LibraryCalendar) (MarkOverdueResult, error) {
 	if !l.due.PassedAt(checked, cal) {
 		return MarkOverdueResult{}, ErrNotPastDue
@@ -172,9 +171,9 @@ type Lent struct {
 func (e Lent) LoanID() LoanID   { return e.loan.id }
 func (e Lent) Version() Version { return e.loan.version }
 func (e Lent) LentAt() LentAt   { return e.lentAt }
-func (e Lent) Due() Due         { return e.loan.due } // 取り出しの関数は、読む呼び手がいるものだけ
+func (e Lent) Due() Due         { return e.loan.due }
 
-// Returned は「本を返した」。返すときは時刻で何も判断しないので、時刻を持たない。出来事の時点はリポジトリが記録のときに取る。
+// Returned は「本を返した」。返すときは時刻で何も判断しないので、時刻を持たない。
 type Returned struct{ loan loanCore }
 
 // MarkOverdueResult と、判定日時を持つイベント Overdue も同じ形である。
