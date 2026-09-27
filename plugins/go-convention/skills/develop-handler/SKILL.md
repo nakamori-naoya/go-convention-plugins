@@ -5,13 +5,13 @@ description: 入口の一つの単位（Connect-RPC の RPC、受信境界、ワ
 
 # develop-handler
 
-中心にあるのは二つの考えである。**値オブジェクトへの変換と業務の時刻の取得は、入口で一度だけ行う。** usecase は検証済みの値だけを受け取る。**入口は判断せず、記録せず、翻訳しない。** 判断は集約が、翻訳と記録は最も外の interceptor が一度だけ行う。
+中心にあるのは二つの考えである。**値オブジェクトへの変換と判断に要る時刻の取得は、入口で一度だけ行う。** usecase は検証済みの値だけを受け取る。**入口は判断せず、記録せず、翻訳しない。** 判断は集約が、翻訳と記録は最も外の interceptor が一度だけ行う。
 
 進め方と赤は `develop-inside-out` に、表を引く関数の契約は apply-crosscutting-contracts に、応答の表は handle-errors、記録は write-logs、テストの共通の形は apply-go-test-convention に従う。前提は `connectrpc.com/connect` v1 である。例は [例：本を借りる RPC](references/example.md) にある。
 
 ## 入口
 
-要求のプリミティブは、入口で値オブジェクトへ変換して usecase の入力に詰め、欠けた値を既定値へ丸めない。業務の時刻は入口が時計から一度だけ取る。要求の本文から時刻や主体を受け取らず、主体は認可の interceptor が解決して ctx に載せたものを使う。資源の持ち主と主体の一致のような判断は、集約のコマンドの事前条件にする。
+要求のプリミティブは、入口で値オブジェクトへ変換して usecase の入力に詰め、欠けた値を既定値へ丸めない。判断に要る時刻（基準は development-convention の `apply-layer-convention`）は入口が時計から一度だけ取り、要らない時刻は取らない。要求の本文から時刻や主体を受け取らず、主体は認可の interceptor が解決して ctx に載せたものを使う。資源の持ち主と主体の一致のような判断は、集約のコマンドの事前条件にする。
 
 handler の本文は、一つの usecase を呼び、エラーを `return nil, err` でそのまま返す。`errors.Is` で分岐せず、`connect.NewError` を作らず、記録しない。応答への写しは `<元>To<先>` の変換の関数に置き、値を取り出して詰めるだけにする。
 
