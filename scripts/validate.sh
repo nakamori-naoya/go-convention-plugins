@@ -12,7 +12,7 @@ PLUGIN="$ROOT/plugins/go-convention"
 SKILL="$PLUGIN/skills/apply-go-test-convention"
 EXAMPLES="$ROOT/tests/examples"
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/go-convention-validation.XXXXXX") || exit 2
-GOLANGCI_LINT_VERSION=v2.12.2
+GOLANGCI_LINT_VERSION=v2.14.0
 trap 'rm -rf "$TMP_ROOT"' EXIT
 passed=0 failed=0 skipped=0
 pass() { printf 'PASS: %s\n' "$1"; passed=$((passed + 1)); }
