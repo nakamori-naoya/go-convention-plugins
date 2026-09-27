@@ -31,7 +31,7 @@ const (
 // LoanID は、貸出を見分ける貸出番号である。
 type LoanID struct{ id uuid.UUID }
 
-// NewLoanIDFromUUID は、採番器が返した UUID を貸出番号にする。採番はしない。
+// NewLoanIDFromUUID は、ID ジェネレーターが発行した UUID を貸出番号にする。ID の発行はしない。
 func NewLoanIDFromUUID(id uuid.UUID) LoanID { return LoanID{id: id} }
 
 // Version は、保存された貸出の版である。コマンドを受けるたびに一つ進む。
