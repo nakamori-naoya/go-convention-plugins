@@ -85,12 +85,12 @@ var aliases = map[*category]error{
 
 // Error は、分類を土台にした具体エラーである。文言は、応答で利用者に見せてよい内容だけを持つ。
 type Error struct {
-	base Base
+	of   Base
 	text string
 }
 
 func Define(base Base, text string) *Error {
-	return &Error{base: base, text: text}
+	return &Error{of: base, text: text}
 }
 
 func Is(err, target error) bool {
@@ -132,7 +132,7 @@ func Classified(err error) bool {
 // Message は、応答に載せてよい文言を返す。回復不能と分類不能は、固定の文言だけを返す。
 func Message(err error) string {
 	c := Category(err)
-	if c == ErrInternal || c == ErrUnclassified {
+	if stderrors.Is(c, ErrInternal) || stderrors.Is(c, ErrUnclassified) {
 		return internalMessage
 	}
 	if specific, ok := stderrors.AsType[*Error](err); ok {
@@ -144,7 +144,7 @@ func Message(err error) string {
 func (c *category) Error() string { return c.text }
 func (c *category) base()         {}
 func (e *Error) Error() string    { return e.text }
-func (e *Error) Unwrap() error    { return e.base }
+func (e *Error) Unwrap() error    { return e.of }
 func (e *Error) base()            {}
 ```
 
