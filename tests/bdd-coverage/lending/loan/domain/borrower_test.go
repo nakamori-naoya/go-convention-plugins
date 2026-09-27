@@ -4,7 +4,7 @@ package domain_test
 
 import "testing"
 
-func TestPendingLoan_Borrow(t *testing.T) {
+func TestBorrower_Borrow(t *testing.T) {
 	tests := []struct {
 		id          string
 		name        string

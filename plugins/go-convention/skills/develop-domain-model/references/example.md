@@ -9,14 +9,16 @@
 ```go
 package domain
 
-// 業務知識の拒む理由に一つずつ対応する。
+// 業務知識の拒む理由に一つずつ対応する。利用者に返す文言は、貸出の公開契約が決めたものである。
 var (
-	ErrUserHasOverdue   = errors.Define(errors.ErrPrecondition, "延滞の貸出がある利用者が本を借りる")
-	ErrLoanLimitReached = errors.Define(errors.ErrPrecondition, "貸出上限に達している利用者が本を借りる")
-	ErrBookOnLoan       = errors.Define(errors.ErrPrecondition, "貸出中の本を借りる")
-	ErrAlreadyReturned  = errors.Define(errors.ErrPrecondition, "返却済みの本を返す")
-	ErrNotPastDue       = errors.Define(errors.ErrPrecondition, "返却期限を過ぎていない貸出を延滞にする")
+	ErrUserHasOverdue   = errors.Define(errors.ErrPrecondition, "延滞している本を返すまで、新しい本は借りられません")
+	ErrLoanLimitReached = errors.Define(errors.ErrPrecondition, "借りられるのは5冊までです")
+	ErrBookOnLoan       = errors.Define(errors.ErrPrecondition, "この本は貸出中です")
+	ErrAlreadyReturned  = errors.Define(errors.ErrPrecondition, "この本は返却済みです")
 )
+
+// 延滞にするのは図書館の巡回で、利用者には返らないので、業務知識の拒む理由の語をそのまま文言にする。
+var ErrNotPastDue = errors.Define(errors.ErrPrecondition, "返却期限を過ぎていない貸出を延滞にする")
 
 // 値の構造として必ず拒む値。
 var ErrLentCountNegative = errors.Define(errors.ErrInvalidInput, "借りている冊数が負である")
@@ -71,27 +73,27 @@ func NewStanding(lent LentCount, overdue OverdueStatus) Standing {
 ## 集約
 
 ```go
-// PendingLoan は、まだ保存されていない貸出である。版を持たない。
-type PendingLoan struct {
+// Borrower は、本を借りようとしている利用者（借り手）である。まだ貸出は無いので版を持たない。
+type Borrower struct {
 	user     vo.UserNo
 	book     vo.BookNo
 	standing Standing
 }
 
-func NewPendingLoan(user vo.UserNo, book vo.BookNo, standing Standing) PendingLoan {
-	return PendingLoan{user: user, book: book, standing: standing}
+func NewBorrower(user vo.UserNo, book vo.BookNo, standing Standing) Borrower {
+	return Borrower{user: user, book: book, standing: standing}
 }
 
 // Borrow は「本を借りる」。延滞を先に見る（資料の未決の仮置き）。
-func (p PendingLoan) Borrow(id LoanID, lentAt LentAt, cal LibraryCalendar) (BorrowResult, error) {
-	if p.standing.overdue == HasOverdue {
+func (b Borrower) Borrow(id LoanID, lentAt LentAt, cal LibraryCalendar) (BorrowResult, error) {
+	if b.standing.overdue == HasOverdue {
 		return BorrowResult{}, ErrUserHasOverdue
 	}
-	if p.standing.lent.n >= loanLimit {
+	if b.standing.lent.n >= loanLimit {
 		return BorrowResult{}, ErrLoanLimitReached
 	}
-	next := OnLoan{loanCore{id: id, user: p.user, book: p.book, due: DueFrom(lentAt, cal), version: FirstVersion}}
-	return BorrowResult{Next: next, Event: Lent{loan: next.loanCore, lentAt: lentAt}}, nil
+	next := OnLoan{loanSlip{id: id, user: b.user, book: b.book, due: DueFrom(lentAt, cal), version: FirstVersion}}
+	return BorrowResult{Next: next, Event: Lent{loan: next.loanSlip, lentAt: lentAt}}, nil
 }
 
 // Loan は、保存された貸出である。どの状態も同じコマンドを持ち、受けるか拒むかを状態ごとに決める。
@@ -102,8 +104,8 @@ type Loan interface {
 	loan()
 }
 
-// loanCore は、どの状態でも変わらない値である。貸出日時は持たない。後のコマンドが判断に使うのは返却期限だけだからである。
-type loanCore struct {
+// loanSlip は、貸出票（どの利用者がどの本をいつまでに返すか）である。どの状態でも変わらない。貸出日時は持たない。後のコマンドが判断に使うのは返却期限だけだからである。
+type loanSlip struct {
 	id      LoanID
 	user    vo.UserNo
 	book    vo.BookNo
@@ -111,12 +113,12 @@ type loanCore struct {
 	version Version
 }
 
-type OnLoan struct{ loanCore }
-type OverdueLoan struct{ loanCore }
-type ReturnedLoan struct{ loanCore } // 終端。どのコマンドも受けない
+type OnLoan struct{ loanSlip }
+type OverdueLoan struct{ loanSlip }
+type ReturnedLoan struct{ loanSlip } // 終端。どのコマンドも受けない
 
 func RestoreOnLoan(id LoanID, user vo.UserNo, book vo.BookNo, due Due, v Version) OnLoan {
-	return OnLoan{loanCore{id: id, user: user, book: book, due: due, version: v}}
+	return OnLoan{loanSlip{id: id, user: user, book: book, due: due, version: v}}
 }
 
 // RestoreOverdueLoan、RestoreReturnedLoan も同じ形である。
@@ -130,22 +132,22 @@ func (l OnLoan) MarkOverdue(checked CheckedAt, cal LibraryCalendar) (MarkOverdue
 	if !l.due.PassedAt(checked, cal) {
 		return MarkOverdueResult{}, ErrNotPastDue
 	}
-	next := OverdueLoan{l.loanCore.next()}
-	return MarkOverdueResult{Next: next, Event: Overdue{loan: next.loanCore, checkedAt: checked}}, nil
+	next := OverdueLoan{l.loanSlip.next()}
+	return MarkOverdueResult{Next: next, Event: Overdue{loan: next.loanSlip, checkedAt: checked}}, nil
 }
 
 func (OnLoan) loan()       {}
 func (OverdueLoan) loan()  {}
 func (ReturnedLoan) loan() {}
 
-func (c loanCore) returnLoan() ReturnResult {
-	next := ReturnedLoan{c.next()}
-	return ReturnResult{Next: next, Event: Returned{loan: next.loanCore}}
+func (s loanSlip) returnLoan() ReturnResult {
+	next := ReturnedLoan{s.next()}
+	return ReturnResult{Next: next, Event: Returned{loan: next.loanSlip}}
 }
 
-func (c loanCore) next() loanCore {
-	c.version = c.version.Next()
-	return c
+func (s loanSlip) next() loanSlip {
+	s.version = s.version.Next()
+	return s
 }
 ```
 
@@ -164,7 +166,7 @@ type ReturnResult struct {
 
 // Lent は「本を借りた」。返却期限を決めるのに使った貸出日時を持ち、それが出来事の時点になる。
 type Lent struct {
-	loan   loanCore
+	loan   loanSlip
 	lentAt LentAt
 }
 
@@ -174,14 +176,14 @@ func (e Lent) LentAt() LentAt   { return e.lentAt }
 func (e Lent) Due() Due         { return e.loan.due }
 
 // Returned は「本を返した」。返すときは時刻で何も判断しないので、時刻を持たない。
-type Returned struct{ loan loanCore }
+type Returned struct{ loan loanSlip }
 
 // MarkOverdueResult と、判定日時を持つイベント Overdue も同じ形である。
 
 // LoanRepository は、貸出の永続化ポートである。
 type LoanRepository interface {
 	FindLoan(ctx context.Context, id LoanID) (Loan, error)
-	FindPendingLoan(ctx context.Context, user vo.UserNo, book vo.BookNo) (PendingLoan, error)
+	FindBorrower(ctx context.Context, user vo.UserNo, book vo.BookNo) (Borrower, error)
 	ApplyLent(ctx context.Context, evt Lent) error
 	ApplyReturned(ctx context.Context, evt Returned) error
 	ApplyOverdue(ctx context.Context, evt Overdue) error
@@ -195,7 +197,7 @@ package domain_test
 
 // BDD の資料: docs/lending/業務知識.md
 
-func TestPendingLoan_Borrow(t *testing.T) {
+func TestBorrower_Borrow(t *testing.T) {
 	t.Parallel()
 
 	user := vobuilders.NewUserNoBuilder().Build(t)
@@ -237,7 +239,7 @@ Then: 利用者 U-0001 と本 B-1001 の貸出が貸出中で生まれる
 		t.Run(tt.id+" "+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := domain.NewPendingLoan(user, book, tt.standing).Borrow(loanID, lentAt, cal)
+			got, err := domain.NewBorrower(user, book, tt.standing).Borrow(loanID, lentAt, cal)
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
 				assert.Zero(t, got)

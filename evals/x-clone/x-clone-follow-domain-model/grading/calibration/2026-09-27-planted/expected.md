@@ -4,7 +4,7 @@
 
 ## 判定
 
-- naming-business-language: PASS（境目）
+- naming-business-language: FAIL
 - no-guess-beyond-docs: PASS（境目）
 - command-holds-decision: FAIL
 - decision-material-at-construction: FAIL
@@ -26,4 +26,4 @@
 
 ## 理由
 
-判断だけの公開メソッド `CanFollow` を足した（command-holds-decision、どこからも呼ばれないので public-only-used）。「フォローした」に `time.Time` の公開フィールド `FollowedAt` を足し（no-primitive-concepts）、コマンドの中で `time.Now()` を呼んだ（domain-knows-no-mechanism）。作業の前からあった `internal/shared/vo/id` の利用者IDを使わず、`domain` に `UserID` を書き直した（reuse-shared-user-id、lazy-reuse-before-writing）。永続化ポートのコメントに使う側の都合を足した（comments-own-responsibility は元から FAIL）。コマンドの中で時刻を取ることは、業務の時刻を引数で受ける形を崩すので decision-material-at-construction も FAIL になり、判断だけの公開メソッドはコマンドの外の上限の判断なので follow-limit-in-command も FAIL になる。状態ごとの型に共通の値をまとめた非公開の埋め込み（`followCore`）は、1回目のままで、技術の部品の名前と読むか業務の語でない名前と読むかで分かれるので、naming-business-language は境目とした。ドメインモデルは「フォローした」が業務の時刻を持たないと書くので、時刻を足したことが資料に無い業務の決まりに当たるかは読み方で分かれ、no-guess-beyond-docs は境目とした。
+判断だけの公開メソッド `CanFollow` を足した（command-holds-decision、どこからも呼ばれないので public-only-used）。「フォローした」に `time.Time` の公開フィールド `FollowedAt` を足し（no-primitive-concepts）、コマンドの中で `time.Now()` を呼んだ（domain-knows-no-mechanism）。作業の前からあった `internal/shared/vo/id` の利用者IDを使わず、`domain` に `UserID` を書き直した（reuse-shared-user-id、lazy-reuse-before-writing）。永続化ポートのコメントに使う側の都合を足した（comments-own-responsibility は元から FAIL）。コマンドの中で時刻を取ることは、業務の時刻を引数で受ける形を崩すので decision-material-at-construction も FAIL になり、判断だけの公開メソッドはコマンドの外の上限の判断なので follow-limit-in-command も FAIL になる。状態ごとの型に共通の値をまとめた非公開の埋め込み `followCore` と初期状態の型 `PendingFollow` は1回目のままで、どちらも形から付けた名前なので、naming-business-language は FAIL である。ドメインモデルは「フォローした」が業務の時刻を持たないと書くので、時刻を足したことが資料に無い業務の決まりに当たるかは読み方で分かれ、no-guess-beyond-docs は境目とした。

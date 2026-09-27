@@ -53,7 +53,7 @@ interface は自分の名前のファイルに単独で置き（同じファイ�
 
 名前を業務の言葉で付けること、英名を資料のユビキタス言語から取り無ければ止まること、コメントを自分の責務だけで業務の言葉で書き外部の値にサンプルを添えることは、development-convention の `write-readable-code` に従う。ここに置くのは Go の形だけである。
 
-名前は `package.Name` の形で一回で意味が通るようにし、型名に package 名を繰り返さない（`clock.ClockInterface` にしない）。形の決まった名前は次のとおりである。生成は `New<型>`、永続化からの組み立て直しは `Restore<型>`、コマンドの結果は `<コマンド名>Result`、usecase の入出力は `<usecase名>Input` と `<usecase名>Output`、変換は `<元>To<先>`、エラーは `Err<何が拒まれたか>`。値を返すメソッドに `Get` を付けず、頭字語は `ID`、`URL` のように揃える。`util`、`common`、`helpers`、`types` のような何でも入る package とファイルを作らない。コメントを書くときは、識別子の名前で始める（godoc の形）。
+名前は `package.Name` の形で一回で意味が通るようにし、型名に package 名を繰り返さない（`clock.ClockInterface` にしない）。形の決まった名前は次のとおりである。生成は `New<型>`、永続化からの組み立て直しは `Restore<型>`、コマンドの結果は `<コマンド名>Result`、usecase の入出力は利用者が出すものと受け取るものの業務の語（`Input`、`Output` の接尾辞を付けない）、変換は `<元>To<先>`、エラーは `Err<何が拒まれたか>`。値を返すメソッドに `Get` を付けず、頭字語は `ID`、`URL` のように揃える。`util`、`common`、`helpers`、`types` のような何でも入る package とファイルを作らない。コメントを書くときは、識別子の名前で始める（godoc の形）。
 
 ## package の木と import の向き
 

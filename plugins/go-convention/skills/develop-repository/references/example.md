@@ -25,26 +25,26 @@ func (r *LoanRepository) queries(ctx context.Context) (*sqlcgen.Queries, error) 
 	return sqlcgen.New(executor), nil
 }
 
-// FindPendingLoan は、利用者の貸出状況を読み、これから借りる貸出を返す。借りられるかは判断しない。
-func (r *LoanRepository) FindPendingLoan(ctx context.Context, user vo.UserNo, book vo.BookNo) (domain.PendingLoan, error) {
+// FindBorrower は、利用者の貸出状況を読み、本を借りようとしている利用者を返す。借りられるかは判断しない。
+func (r *LoanRepository) FindBorrower(ctx context.Context, user vo.UserNo, book vo.BookNo) (domain.Borrower, error) {
 	q, err := r.queries(ctx)
 	if err != nil {
-		return domain.PendingLoan{}, err
+		return domain.Borrower{}, err
 	}
 	// 物理設計の Read-001。
 	row, err := q.GetUserLoanStanding(ctx, user.Value())
 	if err != nil {
-		return domain.PendingLoan{}, rdb.Translate(ctx, err, nil)
+		return domain.Borrower{}, rdb.Translate(ctx, err, nil)
 	}
 	lent, err := domain.NewLentCount(int(row.ActiveCount))
 	if err != nil {
-		return domain.PendingLoan{}, fmt.Errorf("%w: 利用者 %s の借りている冊数: %s", ErrStoredLoanCorrupted, user.Value(), err.Error())
+		return domain.Borrower{}, fmt.Errorf("%w: 利用者 %s の借りている冊数: %s", ErrStoredLoanCorrupted, user.Value(), err.Error())
 	}
 	overdue := domain.NoOverdue
 	if row.HasOverdue {
 		overdue = domain.HasOverdue
 	}
-	return domain.NewPendingLoan(user, book, domain.NewStanding(lent, overdue)), nil
+	return domain.NewBorrower(user, book, domain.NewStanding(lent, overdue)), nil
 }
 ```
 
@@ -193,4 +193,4 @@ for _, tt := range tests { // 同じ実 DB を全ケースが共有するため�
 }
 ```
 
-`loanL001` はファイルスコープの `const`（`"0193a3c1-7a4e-7c2e-9f10-5b8d2e6a4f01"`）で、変換はテスト関数の中で一度だけ行うので、helper 関数も、同じ変換を繰り返す無名関数も要らない。`suite.Reader` は時刻の列を UTC で読むように組んであるので、期待の時刻も UTC で書けば行の型のまま比べられる。同じ本を二人が同時に借りる BDD は、二つのトランザクションでそれぞれ `FindPendingLoan` まで進め、一つ目の `ApplyLent` を確定させた後に二つ目の `ApplyLent` を呼び、`domain.ErrBookOnLoan` と、貸出の行が一行だけであることを確かめる。
+`loanL001` はファイルスコープの `const`（`"0193a3c1-7a4e-7c2e-9f10-5b8d2e6a4f01"`）で、変換はテスト関数の中で一度だけ行うので、helper 関数も、同じ変換を繰り返す無名関数も要らない。`suite.Reader` は時刻の列を UTC で読むように組んであるので、期待の時刻も UTC で書けば行の型のまま比べられる。同じ本を二人が同時に借りる BDD は、二つのトランザクションでそれぞれ `FindBorrower` まで進め、一つ目の `ApplyLent` を確定させた後に二つ目の `ApplyLent` を呼び、`domain.ErrBookOnLoan` と、貸出の行が一行だけであることを確かめる。

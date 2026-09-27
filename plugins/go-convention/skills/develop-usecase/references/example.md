@@ -13,39 +13,41 @@ type BorrowBook struct {
 	calendar domain.LibraryCalendar
 }
 
-type BorrowBookInput struct {
+// LoanRequest は、利用者が出す貸出の申し込みである。
+type LoanRequest struct {
 	User   vo.UserNo
 	Book   vo.BookNo
 	LentAt domain.LentAt
 }
 
-type BorrowBookOutput struct {
+// LoanReceipt は、利用者が受け取る貸出レシートである。
+type LoanReceipt struct {
 	Loan domain.LoanID
 	Due  domain.Due
 }
 
-func (u *BorrowBook) Execute(ctx context.Context, in BorrowBookInput) (BorrowBookOutput, error) {
+func (u *BorrowBook) Execute(ctx context.Context, req LoanRequest) (LoanReceipt, error) {
 	loanID := domain.NewLoanIDFromUUID(u.ids.NewID()) // トランザクションの外で採番する
-	var out BorrowBookOutput
+	var receipt LoanReceipt
 	err := u.tx.Run(ctx, borrowTxOptions, func(ctx context.Context) error {
-		pending, err := u.loans.FindPendingLoan(ctx, in.User, in.Book)
+		borrower, err := u.loans.FindBorrower(ctx, req.User, req.Book)
 		if err != nil {
 			return err
 		}
-		res, err := pending.Borrow(loanID, in.LentAt, u.calendar)
+		res, err := borrower.Borrow(loanID, req.LentAt, u.calendar)
 		if err != nil {
 			return err
 		}
 		if err := u.loans.ApplyLent(ctx, res.Event); err != nil {
 			return err
 		}
-		out = BorrowBookOutput{Loan: res.Event.LoanID(), Due: res.Event.Due()}
+		receipt = LoanReceipt{Loan: res.Event.LoanID(), Due: res.Event.Due()}
 		return nil
 	})
 	if err != nil {
-		return BorrowBookOutput{}, err
+		return LoanReceipt{}, err
 	}
-	return out, nil
+	return receipt, nil
 }
 ```
 
