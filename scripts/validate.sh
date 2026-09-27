@@ -2,7 +2,8 @@
 # Scenario: go-conventionの各skillのreferenceが入口から届き、テストの形の例がコンパイルして通る
 # Given: 各skillのreference、check-cases.py、check-bdd-coverage.py、tests/examplesのGoモジュールがある
 # When: root契約（harness-tools）、reference到達性、例と断片の一致、
-#       check-cases.pyの正常系・正例・負例、check-bdd-coverage.pyの正例・反例・境界例、shell構文、goのgofmt・vet・shuffleテストを実行する
+#       check-cases.pyの正常系・正例・負例、check-bdd-coverage.pyの正例・反例・境界例、shell構文、goのgofmt・vet・shuffleテスト、
+#       tooling.md の設定での golangci-lint を実行する
 # Then: 不整合が一つでもあれば非0で終了する。兄弟checkout harness-tools が無ければ止まる。goが無ければgofmt・vet・testは省略と表示し失敗にしない
 set -uo pipefail
 
@@ -11,6 +12,7 @@ PLUGIN="$ROOT/plugins/go-convention"
 SKILL="$PLUGIN/skills/apply-go-test-convention"
 EXAMPLES="$ROOT/tests/examples"
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/go-convention-validation.XXXXXX") || exit 2
+GOLANGCI_LINT_VERSION=v2.12.2
 trap 'rm -rf "$TMP_ROOT"' EXIT
 passed=0 failed=0 skipped=0
 pass() { printf 'PASS: %s\n' "$1"; passed=$((passed + 1)); }
@@ -285,6 +287,44 @@ bdd_mutated "最後に無い列挙" unowned-not-last reject "ファイルの最�
 bdd_mutated "資料の種類の接頭辞を足した ID" prefixed-id reject "BDD-<3桁以上の連番>"
 bdd_mutated "どのテストも担わない BDD の列挙（境界例）" unowned-listed accept
 
+# 止めた BDD の一覧（--stopped）。BDD-003 をどのテストにも載せない複製と、載せたままの複製に、一覧の一行を与える
+bdd_stopped() {
+  local label=$1 key=$2 covered=$3 line=$4 expect=$5 needle=${6:-} dir="$TMP_ROOT/bdd-stopped-$2"
+  rm -rf "$dir"; cp -R "$BDD_FIXTURE" "$dir"
+  if [ "$covered" = no ]; then
+    python3 - "$dir/lending/loan/domain/pending_loan_test.go" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+text = path.read_text()
+if '"BDD-003"' not in text:
+    raise SystemExit("変更の元になる文字列が無い: BDD-003")
+path.write_text(text.replace('"BDD-003"', '"9e41b7"', 1))
+PY
+  fi
+  printf '# 止めた BDD\n%s\n' "$line" >"$dir/stopped.txt"
+  python3 "$BDD_CHECK" --stopped stopped.txt "$dir" "$BDD_DOC" >"$dir.out" 2>&1
+  local code=$?
+  if [ "$expect" = accept ]; then
+    if [ "$code" -eq 0 ] && rg -F "止めた BDD: $BDD_DOC の BDD-003" "$dir.out" >/dev/null; then
+      pass "check-bdd-coverage.py が${label}を受理し、止めた BDD として出す"
+    else
+      cat "$dir.out"; fail "check-bdd-coverage.py が${label}を受理しない"
+    fi
+  elif [ "$code" -ne 1 ]; then
+    cat "$dir.out"; fail "check-bdd-coverage.py が${label}を拒否しない（終了コード $code）"
+  elif ! rg -F "$needle" "$dir.out" >/dev/null; then
+    cat "$dir.out"; fail "check-bdd-coverage.py が${label}を別の理由で拒否"
+  else
+    pass "check-bdd-coverage.py が${label}を拒否"
+  fi
+}
+bdd_stopped "理由付きで止めた BDD（境界例）" stopped-with-reason no "$BDD_DOC BDD-003 物理設計に守り方の指定が無いので止め、物理設計の資料へ返した" accept
+bdd_stopped "理由の無い止めた BDD" stopped-without-reason no "$BDD_DOC BDD-003" reject "理由が無い"
+bdd_stopped "資料に無い止めた BDD" stopped-unknown-id no "$BDD_DOC BDD-099 理由" reject "見出しに無い"
+bdd_stopped "引数に無い資料の止めた BDD" stopped-unknown-doc no "docs/other.md BDD-003 理由" reject "引数の資料に無い"
+bdd_stopped "止めたのにテストが名乗る BDD" stopped-but-covered yes "$BDD_DOC BDD-003 理由" reject "テストに現れる"
+
 syntax_failed=0
 while IFS= read -r script; do bash -n "$script" || syntax_failed=1; done < <(find "$ROOT/plugins" "$ROOT/scripts" -type f -name '*.sh' | sort)
 [ "$syntax_failed" -eq 0 ] && pass "shell構文" || fail "shell構文"
@@ -304,6 +344,29 @@ if command -v go >/dev/null 2>&1; then
     pass "tests/examples go test -shuffle=on（テスト関数間の順序依存は見つからなかった）"
   else
     cat "$TMP_ROOT/test.out"; fail "tests/examples go test -shuffle=on"
+  fi
+  # 見本は、同じ plugin の lint の設定でそのまま通らなければならない。設定の基準は write-go-code の tooling.md の一か所で、ここへ写さない
+  LINT_DIR="$TMP_ROOT/lint-examples"
+  cp -R "$EXAMPLES" "$LINT_DIR"
+  if python3 - "$PLUGIN/skills/write-go-code/references/tooling.md" "$LINT_DIR/.golangci.yml" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+text = Path(sys.argv[1]).read_text()
+blocks = re.findall(r"```yaml\n(.*?)```", text, re.S)
+if len(blocks) != 1:
+    raise SystemExit(f"tooling.md の yaml のブロックが {len(blocks)} 個ある（ちょうど 1 個）")
+Path(sys.argv[2]).write_text(blocks[0].replace("example.com/library", "example.com/go-test-convention/examples"))
+PY
+  then
+    if (cd "$LINT_DIR" && go run "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$GOLANGCI_LINT_VERSION" run ./... >"$TMP_ROOT/lint.out" 2>&1); then
+      pass "tests/examples が tooling.md の golangci-lint の設定で通る"
+    else
+      cat "$TMP_ROOT/lint.out"; fail "tests/examples が tooling.md の golangci-lint の設定で通らない"
+    fi
+  else
+    fail "tooling.md から golangci-lint の設定を取り出せない"
   fi
 else
   skip "go が無いため tests/examples の gofmt・vet・test を省略"

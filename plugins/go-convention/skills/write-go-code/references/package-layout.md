@@ -1,26 +1,36 @@
 # package の木と import の向き
 
-確定した業務文脈を `{context}`、集約を `{aggregate}`、単純なパターンの手順を `{procedure}` として、次の木へ写す。directory は責務が実在するときだけ作る。
+確定した業務文脈を `{context}`、集約を `{aggregate}`、単純なパターンの手順を `{procedure}`、別々に起動するプロセス（API、Outbox の中継、配信のワーカー）を配備単位 `{deploy}` として、次の木へ写す。directory は責務が実在するときだけ作る。
 
 ```text
-internal/
+internal/                  二つ以上の配備単位が使うもの
 ├── crosscutting/          横断的関心事（errors、log、clock、idgen、tx、rdb、config、dockertest、integrationtest）
 ├── shared/vo/             文脈共有の値オブジェクト（識別子が多ければ shared/vo/id）
 └── contracts/{message}/   プロセス間のメッセージの契約（Outbox の要求、配信のメッセージ）
-{context}/
-├── {aggregate}/
-│   ├── domain/            集約、状態の型、値オブジェクト、イベント、永続化ポート、エラー
-│   ├── repository/        永続化ポートの実装と、イベントから sqlc の引数を作る marshaller/
-│   ├── usecase/command/   command の usecase
-│   ├── usecase/query/     読み取りのポート、読み取りモデル、query の usecase
-│   ├── query/             読み取りのポートの実装
-│   └── handler/           入口（RPC、受信境界、巡回）
-├── {procedure}/
-│   ├── usecase/           手順と、手順が所有するポート
-│   ├── repository/        手順の口の実装
-│   └── handler/           入口
-└── orchestration/usecase/command/  資料が同じ時点で二つ以上の集約へ書くと定めた command
+{deploy}/
+├── cmd/{binary}/          main と run
+└── internal/
+    ├── {context}/
+    │   ├── {aggregate}/
+    │   │   ├── domain/            集約、状態の型、値オブジェクト、イベント、永続化ポート、エラー
+    │   │   ├── repository/        永続化ポートの実装と、イベントから sqlc の引数を作る marshaller/
+    │   │   ├── usecase/command/   command の usecase
+    │   │   ├── usecase/query/     読み取りのポート、読み取りモデル、query の usecase
+    │   │   ├── query/             読み取りのポートの実装
+    │   │   └── handler/           入口（RPC、受信境界、巡回）
+    │   ├── {procedure}/
+    │   │   ├── usecase/           手順と、手順が所有するポート
+    │   │   ├── repository/        手順の口の実装
+    │   │   └── handler/           入口
+    │   └── orchestration/usecase/command/  資料が同じ時点で二つ以上の集約へ書くと定めた command
+    └── {目的}/                その配備単位だけが使う横断（認証、認可、組み立て）
 ```
+
+## 配備単位を木の最上位に置く
+
+業務のコードは、それを動かす配備単位の `internal/` の下に置く。Go の `internal` の規則で、ある配備単位の業務のコードを別の配備単位が import できなくなり、プロセスの境界をコンパイラが守るからである。別の配備単位の業務と協調するときは、`contracts` のメッセージか、その配備単位が公開する入口を通す。プロセスが一つしか無い repository でも同じ形にし、プロセスを足すときに木を組み替えない。repository の直下の `internal/` には、二つ以上の配備単位が使うものだけを置く。
+
+`domain` は集約ごとに一つの package にし、エンティティ、イベント、値オブジェクト、永続化ポートを別の package へ分けない。分けると、コマンドがイベントを作るためにイベントの生成関数を公開することになり、コマンドの外からイベントを作れてしまうからである。`{context}` と `{aggregate}` が同じ英名になったら、集約の英名を業務知識のユビキタス言語から取っているかを確かめる。取っていて同じなら、重ねたままにして木の形を崩さない。
 
 ## 共有の置き場は、責務を定めたものだけにする
 
@@ -38,7 +48,7 @@ internal/
 
 `usecase/query` は、読み取りのポートと読み取りモデルを所有し、`query` の実装を import しない。`query` は `usecase/query` の契約、値オブジェクト、`crosscutting`（rdb、errors）、DB の生成型を import し、集約を復元しない。
 
-`handler` は、usecase と proto の生成型だけを import する。リポジトリと Query の実装を usecase へ渡すのは、組み立ての関数だけである。巡回の入口が query の usecase で候補を選び、一件ずつ command の usecase を呼ぶのはよい。
+`handler` は、usecase、proto の生成型、要求を変換する値オブジェクト（`shared/vo` と `domain` の値オブジェクト）を import し、集約、永続化ポート、リポジトリ、Query の実装を使わない。リポジトリと Query の実装を usecase へ渡すのは、組み立ての関数だけである。巡回の入口が query の usecase で候補を選び、一件ずつ command の usecase を呼ぶのはよい。
 
 `{procedure}/usecase` は、自分が所有するポート、`contracts`、`shared/vo`、`crosscutting`（tx、errors、log）を import し、DB の生成型と pgx を import しない。
 

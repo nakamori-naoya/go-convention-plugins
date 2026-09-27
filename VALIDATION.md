@@ -54,7 +54,7 @@ bash scripts/validate.sh
 
 ## Go
 
-`go` があれば `tests/examples/`（`go.mod` の `go` 指示は 1.27。手元の `go` が古くても `GOTOOLCHAIN=auto` なら 1.27 を取得して実行します）で `gofmt -l`、`go vet ./...`、`go test -shuffle=on -count=1 ./...` を実行します。`-shuffle=on` が入れ替えるのはテスト関数の順序だけで、サブテストの順序は変えません。`go` が無ければこの3つは「省略」と表示し、失敗にはしません。
+`go` があれば `tests/examples/`（`go.mod` の `go` 指示は 1.27。手元の `go` が古くても `GOTOOLCHAIN=auto` なら 1.27 を取得して実行します）で `gofmt -l`、`go vet ./...`、`go test -shuffle=on -count=1 ./...` を実行します。`-shuffle=on` が入れ替えるのはテスト関数の順序だけで、サブテストの順序は変えません。続けて、`write-go-code/references/tooling.md` の `.golangci.yml`（yaml のブロックちょうど1個）を取り出し、module path だけを見本のものへ置き換えて、`tests/examples/` の複製に `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@<版>` をかけます。見本が同じ plugin の lint の設定でそのまま通ることを確かめるためで、設定を検査の側へ写しません。`go` が無ければこの4つは「省略」と表示し、失敗にはしません。
 
 ## 言えること
 
@@ -68,11 +68,11 @@ bash scripts/validate.sh
 基準資料: bdd-discovery-and-formulation の write-bdd の「BDDの番号は資料の中で一意か」（見出しは `### [BDD-<3桁以上の連番>] <業務結果>`、資料の種類の接頭辞を足さない）、引数で渡した資料の見出し、apply-go-test-convention の SKILL.md の「ケースの識別」の宣言と列挙の形
 入力: repository root 配下の全 *_test.go（.git と vendor を除く）と、引数の資料
 正規化: 資料の path は repository root からの相対 path にそろえる。`id:` 行は直後が `name:` のときだけケースと見なす
-合格述語: 各資料に見出しが1つ以上あり資料内で ID が重複しない。BDD の id か列挙を持つファイルは `// BDD の資料:` をちょうど1つ持ち、それが引数の資料である。その id と列挙の ID は宣言した資料にある。各資料の各 ID は、その資料を宣言したファイル全体で、id: か列挙のどちらかにちょうど1回現れる。列挙は1ファイルに1つで、最後にあり、各行に理由がある
+合格述語: 各資料に見出しが1つ以上あり資料内で ID が重複しない。BDD の id か列挙を持つファイルは `// BDD の資料:` をちょうど1つ持ち、それが引数の資料である。その id と列挙の ID は宣言した資料にある。各資料の各 ID は、その資料を宣言したファイル全体で、id: か列挙のどちらかにちょうど1回現れる。列挙は1ファイルに1つで、最後にあり、各行に理由がある。`--stopped` の一覧の各行は `<資料の path> <BDD-ID> <理由と返し先>` で、資料は引数のどれか、ID はその資料にあり、理由が空でなく、一覧の中で重複せず、どのテストにも現れない。一覧の ID は未対応に数えず、`止めた BDD:` の行として出す
 失敗時の診断: 資料と ID、現れた場所（ファイル:行）、宣言の数、列挙の形の違反
 正例: tests/bdd-coverage
-反例: 別の package の同じ BDD、どこにも現れない BDD、資料の宣言の無いファイル、資料に無い ID、資料の種類の接頭辞を足した ID（`BDD-OUT-004`）、id と列挙の両方、理由の無い列挙、最後に無い列挙
-境界例: どのテストも担わない BDD を列挙で持つ（受理）
+反例: 別の package の同じ BDD、どこにも現れない BDD、資料の宣言の無いファイル、資料に無い ID、資料の種類の接頭辞を足した ID（`BDD-OUT-004`）、id と列挙の両方、理由の無い列挙、最後に無い列挙、理由の無い止めた BDD、資料に無い止めた BDD、引数に無い資料の止めた BDD、止めたのにテストが名乗る BDD
+境界例: どのテストも担わない BDD を列挙で持つ（受理）、理由付きで止めた BDD（受理し、止めた BDD として出す）
 意味評価として残す範囲: どのテストがその BDD を主に担うべきか、列挙の理由が正しいか、description が資料の gherkin と一致するか
 ```
 
