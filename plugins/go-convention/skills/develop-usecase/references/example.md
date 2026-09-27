@@ -27,7 +27,7 @@ type LoanReceipt struct {
 }
 
 func (u *BorrowBook) Execute(ctx context.Context, req LoanRequest) (LoanReceipt, error) {
-	loanID := domain.NewLoanIDFromUUID(u.ids.NewID()) // トランザクションの外で採番する
+	loanID := domain.NewLoanIDFromUUID(u.ids.NewID()) // トランザクションの外で ID を発行する
 	var receipt LoanReceipt
 	err := u.tx.Run(ctx, borrowTxOptions, func(ctx context.Context) error {
 		borrower, err := u.loans.FindBorrower(ctx, req.User, req.Book)
