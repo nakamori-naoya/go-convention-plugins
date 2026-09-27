@@ -75,3 +75,26 @@ bash scripts/validate.sh
 境界例: どのテストも担わない BDD を列挙で持つ（受理）
 意味評価として残す範囲: どのテストがその BDD を主に担うべきか、列挙の理由が正しいか、description が資料の gherkin と一致するか
 ```
+
+## 検証の eval
+
+層の skill が、業務の資料から利用者の原則に沿った実装をテスト駆動で書けるかは、root の `evals/` の下のケースで確かめる。一つのケースは、一つのお題の一つの業務の一つの層を、テストから書かせる課題である。実行は `claude plugin eval` が受け持ち、出来の採点は、作業したエージェントとは別の Claude（採点役）が、条件ごとに判定と根拠の引用を書いて受け持つ。今は、ドメイン層（develop-domain-model）の二つのケース（X のクローンのフォロー、電子チケットの分配）を置いている。横断の skill（write-go-code、handle-errors、apply-go-test-convention など）は単独のケースを持たず、層のケースの条件で効いたかを見る。
+
+永続化、usecase、入口の層のケースは置いていない。eval の実行はサンドボックスの中で動き、外への接続も、localhost の TCP も、Docker のソケットも拒まれるので、実物の PostgreSQL を dockertest で起動する規約のテストを緑にできないからである。
+
+置き場は次のとおりである。`evals/criteria/` には、採点役への指示 `brief.md` と、成果の種類ごとの共通の条件（今は `domain-layer.md`）を置く。`evals/scaffold.sh` は、作業場所に手元だけの git repository（`out/`）を作り、`evals/go-module/` の Go の module の土台、お題の資料、ケースが先に置く内側の層（ケースの `fixture/`）を入れる。サンドボックスの中では module を取れないので、利用者の module cache を読むだけの `GOPROXY` を作業場所の go env に書き、依存とツールを先に build する。skill が名前で指す development-convention と testing-strategy の skill は隔離環境に入らないので、兄弟 checkout から `harness/` へ写し、無ければ exit 2 で止まる。マージ前の branch の skill で回すときは、その branch を兄弟 checkout に置いてから回す。`evals/<お題>/materials/` には、実行の担当に渡した資料（業務知識と、それから作ったドメインモデル）を置く。ドメインモデルは、bdd の評価で85点以上だった業務知識から model-domain の現行版で作ったもので、採点していない。`evals/<お題>/<ケース>/` には、実行の指示 `prompt.md` と `case.yaml`、共通の準備を呼ぶ `scaffold.sh`、`graders/`、ケースに固有の条件 `grading/criteria.md`、較正の資料 `grading/calibration/` を置く。
+
+plugin eval の `graders/` には、読まずに判定できることだけを置く。skill を使ったか、テストを走らせたか、赤から始めたかである。赤から始めたかは、実装のファイル（テストと `builders/` を除く）を書く前に、ビルドの失敗かテストの失敗が作業の記録に現れたかを見る。Bash の here document で書いた実装は見分けられないので、この判定は下限である。採点役は作業の記録を読まないので、条件にはしない。
+
+実行と採点は次のとおりである。`--case` は一つずつ渡す。
+
+```bash
+claude plugin eval . --case x-clone-follow-domain-model \
+  --runs 1 --ablation none --keep-temp \
+  --scaffold --allow-tools Write Edit Bash \
+  --max-cost-usd 25 --no-publish
+bash /Users/naoya-nakamoriq/Documents/Github/harness-pluginsv2/harness-tools/tools/grade-eval.sh \
+  "$(pwd)/evals/x-clone/x-clone-follow-domain-model" /private/tmp/e-XXXXXX
+```
+
+条件の重みは、利用者の原則の芯を3、骨組みを2、細部を1とし、採点役を3回回した多数決から100点満点の点数を出す。85点以上は「実用に足る」、70点以上は「手直しで使える」、70点未満は「作り直しが要る」である。条件や採点役への指示を変えたら、`grading/calibration/` の二本（実際の成果と、既知の欠陥を埋めた写し）に採点役をかけ、それぞれの `expected.md` を三つ目の引数に渡して一致を確かめる。較正の資料の報告は `out/trace.jsonl` の result の行に置いてある。実行と採点の結果は `evals/results/` に書かれ、git の管理から外してある。
