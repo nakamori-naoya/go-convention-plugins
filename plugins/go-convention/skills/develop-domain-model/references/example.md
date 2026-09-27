@@ -91,8 +91,8 @@ func (p PendingLoan) Borrow(id LoanID, lentAt LentAt, cal LibraryCalendar) (Borr
 	if p.standing.lent.n >= loanLimit {
 		return BorrowResult{}, ErrLoanLimitReached
 	}
-	next := OnLoan{loanCore{id: id, user: p.user, book: p.book, lentAt: lentAt, due: DueFrom(lentAt, cal), version: FirstVersion}}
-	return BorrowResult{Next: next, Event: Lent{loan: next.loanCore}}, nil
+	next := OnLoan{loanCore{id: id, user: p.user, book: p.book, due: DueFrom(lentAt, cal), version: FirstVersion}}
+	return BorrowResult{Next: next, Event: Lent{loan: next.loanCore, lentAt: lentAt}}, nil
 }
 
 // Loan は、保存された貸出である。どの状態も同じコマンドを持ち、受けるか拒むかを状態ごとに決める。
@@ -103,11 +103,11 @@ type Loan interface {
 	loan()
 }
 
+// loanCore は、どの状態でも変わらない値である。貸出日時は持たない。後のコマンドが判断に使うのは返却期限だけだからである。
 type loanCore struct {
 	id      LoanID
 	user    vo.UserNo
 	book    vo.BookNo
-	lentAt  LentAt
 	due     Due
 	version Version
 }
@@ -116,8 +116,8 @@ type OnLoan struct{ loanCore }
 type OverdueLoan struct{ loanCore }
 type ReturnedLoan struct{ loanCore } // 終端。どのコマンドも受けない
 
-func RestoreOnLoan(id LoanID, user vo.UserNo, book vo.BookNo, lentAt LentAt, due Due, v Version) OnLoan {
-	return OnLoan{loanCore{id: id, user: user, book: book, lentAt: lentAt, due: due, version: v}}
+func RestoreOnLoan(id LoanID, user vo.UserNo, book vo.BookNo, due Due, v Version) OnLoan {
+	return OnLoan{loanCore{id: id, user: user, book: book, due: due, version: v}}
 }
 
 // RestoreOverdueLoan、RestoreReturnedLoan も同じ形である。
@@ -163,15 +163,18 @@ type ReturnResult struct {
 	Event Returned
 }
 
-// Lent は「本を借りた」。貸出日時を持ち、それが出来事の時点になる。
-type Lent struct{ loan loanCore }
+// Lent は「本を借りた」。返却期限を決めるのに使った貸出日時を持ち、それが出来事の時点になる。
+type Lent struct {
+	loan   loanCore
+	lentAt LentAt
+}
 
 func (e Lent) LoanID() LoanID   { return e.loan.id }
 func (e Lent) Version() Version { return e.loan.version }
-func (e Lent) LentAt() LentAt   { return e.loan.lentAt }
+func (e Lent) LentAt() LentAt   { return e.lentAt }
 func (e Lent) Due() Due         { return e.loan.due } // 取り出しの関数は、読む呼び手がいるものだけ
 
-// Returned は「本を返した」。業務の時刻を持たない。出来事の時点はリポジトリが記録のときに決める。
+// Returned は「本を返した」。返すときは時刻で何も判断しないので、時刻を持たない。出来事の時点はリポジトリが記録のときに取る。
 type Returned struct{ loan loanCore }
 
 // MarkOverdueResult と、判定日時を持つイベント Overdue も同じ形である。
@@ -227,7 +230,7 @@ When: 利用者 U-0001 が2026年10月1日 10:00に本 B-1001 を借りる
 Then: 利用者 U-0001 と本 B-1001 の貸出が貸出中で生まれる
   And: 返却期限は2026年10月15日である`,
 			standing:  domain.NewStanding(noneLent, domain.NoOverdue),
-			wantNext:  domain.RestoreOnLoan(loanID, user, book, lentAt, domain.DueFrom(lentAt, cal), domain.FirstVersion),
+			wantNext:  domain.RestoreOnLoan(loanID, user, book, domain.DueFrom(lentAt, cal), domain.FirstVersion),
 			wantEvent: lent{loanID: loanID, version: domain.FirstVersion, lentAt: lentAt},
 		},
 	}

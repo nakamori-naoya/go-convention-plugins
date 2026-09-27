@@ -42,7 +42,7 @@ func NewStanding(lent, overdue Count) Standing {
 	return Standing{lent: lent, overdue: overdue}
 }
 
-// LentAt は、本が貸し出された時点である。
+// LentAt は、本が貸し出された時点である。返却期限を決める。
 type LentAt struct{ at time.Time }
 
 func NewLentAt(at time.Time) LentAt {
@@ -54,10 +54,9 @@ type Due struct{ day time.Time }
 
 func (d Due) Day() time.Time { return d.day }
 
-// OnLoan は、貸出中の貸出である。
+// OnLoan は、貸出中の貸出である。後の延滞の判定に要る返却期限だけを持ち、貸出の時点は持たない。
 type OnLoan struct {
-	lentAt LentAt
-	due    Due
+	due Due
 }
 
 func (l OnLoan) Due() Due { return l.due }
@@ -81,5 +80,5 @@ func (p PendingLoan) Borrow(lentAt LentAt) (OnLoan, error) {
 	}
 	y, m, d := lentAt.at.Date()
 	due := Due{day: time.Date(y, m, d, 0, 0, 0, 0, time.UTC).AddDate(0, 0, loanPeriodDays)}
-	return OnLoan{lentAt: lentAt, due: due}, nil
+	return OnLoan{due: due}, nil
 }

@@ -17,7 +17,7 @@ func (s *LoanServer) BorrowBook(ctx context.Context, req *loanv1.BorrowBookReque
 	out, err := s.borrowBook.Execute(ctx, command.BorrowBookInput{
 		User:   actor.UserNo(),
 		Book:   book,
-		LentAt: domain.NewLentAt(s.clock.Now()), // 業務の時刻は入口で一度だけ取る
+		LentAt: domain.NewLentAt(s.clock.Now()), // 返却期限を決める時刻は入口で一度だけ取る
 	})
 	if err != nil {
 		return nil, err

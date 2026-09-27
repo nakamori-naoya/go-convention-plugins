@@ -87,7 +87,7 @@ func ReturnedToUpdateLoanStateParams(evt domain.Returned) sqlcgen.UpdateLoanStat
 
 ```go
 // ApplyReturned は、返却の出来事を記録し、貸出の状態を返却済みにする。
-// 返却は業務の時刻を持たないので、出来事の時点を時計から一度だけ取る。
+// 返却は時刻で何も判断しないので、出来事の時点を時計から一度だけ取る。
 func (r *LoanRepository) ApplyReturned(ctx context.Context, evt domain.Returned) error {
 	q, err := r.queries(ctx)
 	if err != nil {
@@ -111,7 +111,7 @@ func (r *LoanRepository) ApplyReturned(ctx context.Context, evt domain.Returned)
 }
 ```
 
-`ApplyLent` は、貸出の時点（イベントが持つ業務の時刻）を `Stamps` の `OccurredAt` にし、時計を読まない。`ApplyOverdue` は、延滞の出来事と同じ `Stamps` から延滞の通知の要求の引数も作り、要求の時点を延滞の出来事の時点と同じ値にする。
+`ApplyLent` は、返却期限を決めるのに使った貸出の時点（イベントが持つ）を `Stamps` の `OccurredAt` にし、時計を読まない。`ApplyOverdue` は、延滞の出来事と同じ `Stamps` から延滞の通知の要求の引数も作り、要求の時点を延滞の出来事の時点と同じ値にする。
 
 ## Query の実装の壊れた一件
 
