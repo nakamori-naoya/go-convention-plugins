@@ -22,7 +22,7 @@ func NewUserID(s string) (UserID, error) {
 	return UserID{v: u}, nil
 }
 
-// UserIDFrom は、発行した IDを利用者IDにする。
+// UserIDFrom は、発行した ID を利用者IDにする。
 func UserIDFrom(u uuid.UUID) UserID {
 	return UserID{v: u}
 }
