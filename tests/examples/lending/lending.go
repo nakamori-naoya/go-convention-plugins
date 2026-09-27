@@ -61,21 +61,21 @@ type OnLoan struct {
 
 func (l OnLoan) Due() Due { return l.due }
 
-// PendingLoan は、まだ保存されていない貸出である。借りる瞬間の貸出状況を持つ。
-type PendingLoan struct {
+// Borrower は、本を借りようとしている利用者（借り手）である。借りる瞬間の貸出状況を持つ。
+type Borrower struct {
 	standing Standing
 }
 
-func NewPendingLoan(standing Standing) PendingLoan {
-	return PendingLoan{standing: standing}
+func NewBorrower(standing Standing) Borrower {
+	return Borrower{standing: standing}
 }
 
 // Borrow は「本を借りる」。延滞と上限の両方に当たるときは、延滞を先に見る。
-func (p PendingLoan) Borrow(lentAt LentAt) (OnLoan, error) {
-	if p.standing.overdue.n > 0 {
+func (b Borrower) Borrow(lentAt LentAt) (OnLoan, error) {
+	if b.standing.overdue.n > 0 {
 		return OnLoan{}, ErrUserHasOverdue
 	}
-	if p.standing.lent.n >= loanLimit {
+	if b.standing.lent.n >= loanLimit {
 		return OnLoan{}, ErrLoanLimitReached
 	}
 	y, m, d := lentAt.at.Date()

@@ -12,7 +12,7 @@ import (
 	"example.com/go-test-convention/examples/lending"
 )
 
-func TestPendingLoan_Borrow(t *testing.T) {
+func TestBorrower_Borrow(t *testing.T) {
 	t.Parallel()
 
 	// 表で使う冊数。生成の条件は Count のテストが確かめるので、ここで失敗するなら表以前の問題である。
@@ -101,9 +101,9 @@ Then: 延滞の貸出がある利用者が本を借りるとして拒まれる`,
 		t.Run(tt.id+" "+tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			pending := lending.NewPendingLoan(lending.NewStanding(tt.lent, tt.overdue))
+			borrower := lending.NewBorrower(lending.NewStanding(tt.lent, tt.overdue))
 
-			got, err := pending.Borrow(tt.lentAt)
+			got, err := borrower.Borrow(tt.lentAt)
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
 				assert.Zero(t, got)
