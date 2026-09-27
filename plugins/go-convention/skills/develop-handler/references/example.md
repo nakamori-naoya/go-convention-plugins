@@ -14,7 +14,7 @@ func (s *LoanServer) BorrowBook(ctx context.Context, req *loanv1.BorrowBookReque
 	if err != nil {
 		return nil, err
 	}
-	out, err := s.borrowBook.Execute(ctx, command.BorrowBookInput{
+	receipt, err := s.borrowBook.Execute(ctx, command.LoanRequest{
 		User:   actor.UserNo(),
 		Book:   book,
 		LentAt: domain.NewLentAt(s.clock.Now()), // 返却期限を決める時刻は入口で一度だけ取る
@@ -22,7 +22,7 @@ func (s *LoanServer) BorrowBook(ctx context.Context, req *loanv1.BorrowBookReque
 	if err != nil {
 		return nil, err
 	}
-	return borrowBookOutputToResponse(out), nil
+	return loanReceiptToResponse(receipt), nil
 }
 
 // policies は、手続きごとに求める主体である。表に無い手続きは拒む。

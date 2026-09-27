@@ -4,7 +4,7 @@
 
 ## 判定
 
-- naming-business-language: PASS（境目）
+- naming-business-language: FAIL
 - no-guess-beyond-docs: PASS
 - command-holds-decision: PASS
 - decision-material-at-construction: PASS
@@ -26,4 +26,4 @@
 
 ## 理由
 
-comments-own-responsibility は、`errors.go` の `ErrAlreadyFollowing` の行末のコメント「フォローを記録する側が守る」が、担わないものを誰が担うかを書いているので FAIL とした。状態ごとの型に共通の値をまとめた非公開の埋め込み `followCore` は、技術の部品の名前と読むか業務の語でない名前と読むかで分かれるので、naming-business-language は境目とした。public-only-used は、`Version.Next` と `FirstVersion` が同じ package の中と、これから書く永続化から読まれる値で、今は package の外に呼び手が無いので、境目とした。フォロー中の人数は、ドメインモデルがコマンドの引数に置いていたが、初期状態の型 `PendingFollow` に持たせており、decision-material-at-construction は PASS である。外すと終わる状態遷移なので、`UnfollowUser` の結果が次の状態を持たないのは資料に従った形で、states-and-sum は PASS とした。
+comments-own-responsibility は、`errors.go` の `ErrAlreadyFollowing` の行末のコメント「フォローを記録する側が守る」が、担わないものを誰が担うかを書いているので FAIL とした。状態ごとの型に共通の値をまとめた非公開の埋め込み `followCore` と初期状態の型 `PendingFollow` は、どちらも形から付けた名前なので、naming-business-language は FAIL とした。public-only-used は、`Version.Next` と `FirstVersion` が同じ package の中と、これから書く永続化から読まれる値で、今は package の外に呼び手が無いので、境目とした。フォロー中の人数は、ドメインモデルがコマンドの引数に置いていたが、初期状態の型 `PendingFollow` に持たせており、decision-material-at-construction は PASS である。外すと終わる状態遷移なので、`UnfollowUser` の結果が次の状態を持たないのは資料に従った形で、states-and-sum は PASS とした。

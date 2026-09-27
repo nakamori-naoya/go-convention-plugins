@@ -102,7 +102,7 @@ given_when = (
 )
 then_7c2e19 = "Then: 貸出中の貸出が生まれ、返却期限は2026年10月15日である`,"
 loop_end = "\t\t\tassert.Equal(t, tt.wantDueDay, got.Due().Day())\n\t\t})\n\t}\n}\n"
-sut_line = "\t\t\tpending := lending.NewPendingLoan(lending.NewStanding(tt.lent, tt.overdue))\n"
+sut_line = "\t\t\tborrower := lending.NewBorrower(lending.NewStanding(tt.lent, tt.overdue))\n"
 edits = {
     "dup-id": ('"7c2e19"', '"91d6c8"'),
     "dup-name": ('"4冊借りている利用者は5冊目を借りられる"', '"5冊借りている利用者は6冊目を借りられない"'),
@@ -144,7 +144,7 @@ edits = {
     "benchmark-not-merged": (
         loop_end,
         loop_end
-        + "\nfunc BenchmarkPendingLoan_Borrow(b *testing.B) {\n"
+        + "\nfunc BenchmarkBorrower_Borrow(b *testing.B) {\n"
         "\tfixed := struct {\n\t\tid   string\n\t\tname string\n\t}{\n"
         '\t\tid:   "BDD-001",\n\t\tname: "延滞の無い利用者が本を借りると貸出中の貸出が生まれる",\n\t}\n'
         "\t_ = fixed\n\tfor b.Loop() {\n\t}\n}\n",
@@ -234,7 +234,7 @@ bdd_mutated() {
 from pathlib import Path
 import sys
 root, key = Path(sys.argv[1]), sys.argv[2]
-domain = root / "lending/loan/domain/pending_loan_test.go"
+domain = root / "lending/loan/domain/borrower_test.go"
 usecase = root / "lending/loan/usecase/mark_overdue_test.go"
 def edit(path, old, new):
     text = path.read_text()
@@ -292,7 +292,7 @@ bdd_stopped() {
   local label=$1 key=$2 covered=$3 line=$4 expect=$5 needle=${6:-} dir="$TMP_ROOT/bdd-stopped-$2"
   rm -rf "$dir"; cp -R "$BDD_FIXTURE" "$dir"
   if [ "$covered" = no ]; then
-    python3 - "$dir/lending/loan/domain/pending_loan_test.go" <<'PY'
+    python3 - "$dir/lending/loan/domain/borrower_test.go" <<'PY'
 from pathlib import Path
 import sys
 path = Path(sys.argv[1])
