@@ -55,13 +55,13 @@ func ExecutorFromContext(ctx context.Context) (Executor, error)
 ## 外部のエラーの翻訳：`rdb.Translate`
 
 ```go
-// Constraints は、一意制約の名前から具体エラーへの対応である。例: "loans_book_active_key" → domain.ErrBookOnLoan。
+// Constraints は、制約（一意、外部キー、CHECK）の名前から具体エラーへの対応である。例: "loans_book_active_key" → domain.ErrBookOnLoan。
 type Constraints map[string]*errors.Error
 
 func Translate(ctx context.Context, err error, constraints Constraints) error
 ```
 
-pgx を呼んだ場所は、返ったエラーを必ず `Translate` に通す。`Translate` は handle-errors の PostgreSQL の翻訳表で分類へ写し、分類を外側、元のエラーを内側に包む。分類済みのエラーと ctx の中断と期限切れは包み直さない。一意制約の違反は `constraints` で具体エラーへ写し、載っていなければ分類不能にする。表に無いエラーは変えずに返し、どの分類にも丸めない。境界が分類不能として記録するので、それを見て表に足す。ctx は、呼び出し側の都合か依存先の不調かを見分けるためだけに使う。入力の値を含みうる文言（Detail、Hint）は落としてから連鎖に残す。
+pgx を呼んだ場所は、返ったエラーを必ず `Translate` に通す。`Translate` は handle-errors の PostgreSQL の翻訳表で分類へ写し、分類を外側、元のエラーを内側に包む。分類済みのエラーと ctx の中断と期限切れは包み直さない。制約の違反（一意、外部キー、CHECK）は `constraints` で具体エラーへ写し、載っていなければ分類不能にする。表に無いエラーは変えずに返し、どの分類にも丸めない。境界が分類不能として記録するので、それを見て表に足す。ctx は、呼び出し側の都合か依存先の不調かを見分けるためだけに使う。入力の値を含みうる文言（Detail、Hint）は落としてから連鎖に残す。
 
 ## 時計と採番器：`clock.Clock` と `idgen.Generator`
 

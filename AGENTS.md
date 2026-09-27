@@ -9,4 +9,4 @@
 - 各skillは自己完結にする。自分の `SKILL.md`、`references/`、`scripts/` だけで仕事が完了し、兄弟skillの名前・path・実行済み状態を前提にしない。兄弟identityへの明示依存の有無は構造検査し、文章の意味上の依存は実読して評価する。
 - 層の skill（`develop-domain-model`、`develop-repository`、`develop-usecase`、`develop-handler`）は、その層の実装とテストを一つに持ち、テストを先に赤で置いてから実装する一つの単位を仕上げる。一つの単位の進め方と赤の定義は持たず、development-convention の `develop-inside-out` に従う。
 - 決定の基準資料は `decisions/go-convention-plugins.jsonl` である。規約を変えるときは決定を先に足す。
-- 例はすべて文書上のコード片で、動かす必要はないが Go 1.27 でコンパイルできる形で書く。例外は `tests/examples/` の 1 つの Go モジュール（3 package）で、テストの形の skill の `references/examples.md` と同一に保ち、`check-cases.py` の正例・負例に使う。
+- 例はすべて文書上のコード片で、動かす必要はないが Go 1.27 でコンパイルできる形で書く。例外は `tests/examples/` の 1 つの Go モジュール（被験体と、見本が使う分類だけを持つ分類の package）で、テストの形の skill の `references/examples.md` と同一に保ち、`check-cases.py` の正例・負例に使う。このモジュールは `write-go-code` の `tooling.md` の lint の設定でそのまま通す。

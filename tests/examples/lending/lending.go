@@ -1,20 +1,20 @@
 // Package lending は、テストの形の例のためだけの小さな被験体である。図書館の貸出の「本を借りる」だけを持つ。
-// 例を小さく保つため、エラーの分類の package を使わず、標準の errors で具体エラーを定義している。
 package lending
 
 import (
-	"errors"
 	"time"
+
+	"example.com/go-test-convention/examples/internal/crosscutting/errors"
 )
 
 // 業務知識の拒む理由に一つずつ対応する。
 var (
-	ErrUserHasOverdue   = errors.New("延滞の貸出がある利用者が本を借りる")
-	ErrLoanLimitReached = errors.New("貸出上限に達している利用者が本を借りる")
+	ErrUserHasOverdue   = errors.Define(errors.ErrPrecondition, "延滞の貸出がある利用者が本を借りる")
+	ErrLoanLimitReached = errors.Define(errors.ErrPrecondition, "貸出上限に達している利用者が本を借りる")
 )
 
 // 値の構造として必ず拒む値。
-var ErrCountNegative = errors.New("冊数が負である")
+var ErrCountNegative = errors.Define(errors.ErrInvalidInput, "冊数が負である")
 
 // loanLimit は、一人が同時に借りられる冊数の上限である。
 const loanLimit = 5
