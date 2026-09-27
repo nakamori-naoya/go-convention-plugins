@@ -50,7 +50,40 @@ func (r *LoanRepository) FindPendingLoan(ctx context.Context, user vo.UserNo, bo
 
 同じ本を二人が同時に借りると、後の一方の `InsertLoan` が部分一意 index `loans_book_active_key` の違反になり、翻訳で「貸出中の本を借りる」になる。
 
-## Apply
+## marshaller と Apply
+
+```go
+package marshaller
+
+// eventTypeReturned は、基底イベントの種類の列に書く返却の値である。
+const eventTypeReturned = "returned"
+
+// Stamps は、一回の保存で共有する出来事の時点と識別子である。
+type Stamps struct {
+	OccurredAt time.Time
+	EventID    pgtype.UUID
+}
+
+func ReturnedToInsertLoanBaseEventParams(evt domain.Returned, st Stamps) sqlcgen.InsertLoanBaseEventParams {
+	return sqlcgen.InsertLoanBaseEventParams{
+		EventID:    st.EventID,
+		LoanID:     rdb.UUIDColumn(evt.LoanID().Value()),
+		EventType:  eventTypeReturned,
+		Version:    evt.Version().Value(),
+		OccurredAt: st.OccurredAt,
+	}
+}
+
+// ReturnedToUpdateLoanStateParams は、読んだ版（イベントの版の一つ前）を条件に、状態と版を進める引数を作る。
+func ReturnedToUpdateLoanStateParams(evt domain.Returned) sqlcgen.UpdateLoanStateParams {
+	return sqlcgen.UpdateLoanStateParams{
+		LoanID:         rdb.UUIDColumn(evt.LoanID().Value()),
+		Status:         domain.StatusReturned.Value(),
+		CurrentVersion: evt.Version().Value(),
+		ReadVersion:    evt.Version().Value() - 1,
+	}
+}
+```
 
 ```go
 // ApplyReturned は、返却の出来事を記録し、貸出の状態を返却済みにする。
@@ -60,27 +93,25 @@ func (r *LoanRepository) ApplyReturned(ctx context.Context, evt domain.Returned)
 	if err != nil {
 		return err
 	}
-	occurredAt := r.clock.Now()
-	eventID := rdb.UUIDColumn(r.ids.NewID())
-	if err := q.InsertLoanBaseEvent(ctx, returnedToBaseEventParams(eventID, evt, occurredAt)); err != nil {
+	st := marshaller.Stamps{OccurredAt: r.clock.Now(), EventID: rdb.UUIDColumn(r.ids.NewID())}
+	if err := q.InsertLoanBaseEvent(ctx, marshaller.ReturnedToInsertLoanBaseEventParams(evt, st)); err != nil {
 		return rdb.Translate(ctx, err, loanConstraints)
 	}
-	if err := q.InsertLoanReturnedEvent(ctx, eventID); err != nil {
+	if err := q.InsertLoanReturnedEvent(ctx, st.EventID); err != nil {
 		return rdb.Translate(ctx, err, loanConstraints)
 	}
-	// 読んだ版（イベントの版の一つ前）を条件に、状態と版を進める。0件なら先に別の操作が進めた。
-	updated, err := q.UpdateLoanState(ctx, returnedToUpdateLoanStateParams(evt))
+	updated, err := q.UpdateLoanState(ctx, marshaller.ReturnedToUpdateLoanStateParams(evt))
 	if err != nil {
 		return rdb.Translate(ctx, err, loanConstraints)
 	}
-	if updated == 0 {
+	if updated == 0 { // 先に別の操作が版を進めた
 		return ErrLoanVersionConflict
 	}
 	return nil
 }
 ```
 
-`ApplyLent` は、貸出の時点（イベントが持つ業務の時刻）を `occurred_at` に書き、時計を読まない。`ApplyOverdue` は、延滞の出来事と同じトランザクションで延滞の通知の要求を一行追加し、要求の時点を延滞の出来事の時点と同じ値にする。
+`ApplyLent` は、貸出の時点（イベントが持つ業務の時刻）を `Stamps` の `OccurredAt` にし、時計を読まない。`ApplyOverdue` は、延滞の出来事と同じ `Stamps` から延滞の通知の要求の引数も作り、要求の時点を延滞の出来事の時点と同じ値にする。
 
 ## Query の実装の壊れた一件
 
@@ -97,7 +128,32 @@ for _, row := range rows {
 }
 ```
 
-## テストのループ本体
+## テスト専用の読み取りと突き合わせ
+
+```sql
+-- db/query/lending_loan_test_support.sql。本番と別の生成の package（testsqlcgen）へ生成する。
+-- name: ListLoansForTest :many
+SELECT * FROM loans ORDER BY loan_id;
+
+-- name: ListLoanBaseEventsForTest :many
+SELECT * FROM loan_base_events ORDER BY event_id;
+
+-- name: ListLoanReturnedEventsForTest :many
+SELECT * FROM loan_returned_events ORDER BY event_id;
+```
+
+資料の After の表は、生成された行の型でケースに写す。
+
+```go
+wantLoans: []testsqlcgen.Loan{
+	{LoanID: rowL001, UserNo: "U-001", BookNo: "B-001", Status: "returned", DueOn: dueOn, CurrentVersion: 2},
+},
+wantBaseEvents: []testsqlcgen.LoanBaseEvent{
+	{EventID: rowLentEvent, LoanID: rowL001, EventType: "lent", Version: 1, OccurredAt: lentAt},
+	{EventID: rowReturnedEvent, LoanID: rowL001, EventType: "returned", Version: 2, OccurredAt: returnedAt},
+},
+wantReturnedEvents: []pgtype.UUID{rowReturnedEvent}, // 列が一つのテーブルは、その列の型の一覧になる
+```
 
 ```go
 for _, tt := range tests { // 同じ実 DB を全ケースが共有するため直列で走らせる。
@@ -116,11 +172,19 @@ for _, tt := range tests { // 同じ実 DB を全ケースが共有するため�
 		})
 
 		require.ErrorIs(t, err, tt.wantErr)
-		assert.Equal(t, tt.wantLoans, testq.AllLoans(ctx, t, suite.Reader))
-		assert.Equal(t, tt.wantBaseEvents, testq.AllLoanBaseEvents(ctx, t, suite.Reader))
+		rows := testsqlcgen.New(suite.Reader)
+		loans, err := rows.ListLoansForTest(ctx)
+		require.NoError(t, err)
+		baseEvents, err := rows.ListLoanBaseEventsForTest(ctx)
+		require.NoError(t, err)
+		returnedEvents, err := rows.ListLoanReturnedEventsForTest(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, tt.wantLoans, loans)
+		assert.Equal(t, tt.wantBaseEvents, baseEvents)
+		assert.Equal(t, tt.wantReturnedEvents, returnedEvents)
 		dbassert.RequireRowCountsUnchanged(t, suite.Reader, unchanged)
 	})
 }
 ```
 
-`testq` は、全行を主キー順に読むテスト専用の SQL から生成した package で、本番の生成の package とは別である。同じ本を二人が同時に借りる BDD は、二つのトランザクションでそれぞれ `FindPendingLoan` まで進め、一つ目の `ApplyLent` を確定させた後に二つ目の `ApplyLent` を呼び、`domain.ErrBookOnLoan` と、貸出の行が一行だけであることを確かめる。
+`rowL001` は、資料の `L-001` に対応させた固定の UUID を行の列の型にしたものである。`suite.Reader` は時刻の列を UTC で読むように組んであるので、期待の時刻も UTC で書けば行の型のまま比べられる。同じ本を二人が同時に借りる BDD は、二つのトランザクションでそれぞれ `FindPendingLoan` まで進め、一つ目の `ApplyLent` を確定させた後に二つ目の `ApplyLent` を呼び、`domain.ErrBookOnLoan` と、貸出の行が一行だけであることを確かめる。

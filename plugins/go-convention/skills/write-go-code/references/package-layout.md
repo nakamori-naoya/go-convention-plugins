@@ -10,7 +10,7 @@ internal/
 {context}/
 ├── {aggregate}/
 │   ├── domain/            集約、状態の型、値オブジェクト、イベント、永続化ポート、エラー
-│   ├── repository/        永続化ポートの実装
+│   ├── repository/        永続化ポートの実装と、イベントから sqlc の引数を作る marshaller/
 │   ├── usecase/command/   command の usecase
 │   ├── usecase/query/     読み取りのポート、読み取りモデル、query の usecase
 │   ├── query/             読み取りのポートの実装
@@ -26,7 +26,7 @@ internal/
 
 ドメインモデルのクラス図で `<<値オブジェクト・文脈共有>>` の印が付いた値は `internal/shared/vo` に、印の無い値オブジェクトはその集約の `domain` に置く。印の付いた値を一つの集約の `domain` に置くと、別の集約や別のプロセスがその `domain` を import することになるからである。送る側と受ける側のプロセスが同じ型を使うメッセージは `internal/contracts` に置く。禁じるのは `shared` という名前ではなく、`common` や `util` のように責務を定めない置き場である。
 
-テストの前提を組み立てる Builder は、組み立てる対象の実装の直下の `builders/` に、mock は interface を所有する package の直下の `mock/` に置く。本番のコードは `builders` と `mock` を import しない。
+テストの前提を組み立てる Builder は、組み立てる対象の実装の直下の `builders/` に、mock は interface を所有する package の直下の `mock/` に、テストが全行を読む SQL の生成先は集約の直下の `testsqlcgen/` に置く。本番のコードは `builders`、`mock`、`testsqlcgen` を import しない。
 
 ## import は外側から内側へだけ向かう
 
