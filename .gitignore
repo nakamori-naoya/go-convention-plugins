@@ -22,4 +22,4 @@ __pycache__/
 !/.gitignore
 
 # 評価の入力・成果物は各作業環境に保持する
-/evals/
+evals/
