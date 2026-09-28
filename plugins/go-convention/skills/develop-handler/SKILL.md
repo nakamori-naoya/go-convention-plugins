@@ -13,7 +13,7 @@ description: 入口の一つの単位（Connect-RPC の RPC、受信境界、ワ
 
 要求のプリミティブは、入口で値オブジェクトへ変換して usecase の入力に詰め、欠けた値を既定値へ丸めない。判断に要る時刻（基準は development-convention の `apply-layer-convention`）は入口が時計から一度だけ取り、要らない時刻は取らない。要求の本文から時刻や主体を受け取らず、主体は認可の interceptor が解決して ctx に載せたものを usecase の入力に詰める。主体と資源の持ち主の一致は入口で確かめず、ドメインモデルがコマンドの事前条件に置いたものを集約が確かめる。
 
-handler の本文は、一つの usecase を呼び、エラーを `return nil, err` でそのまま返す。`errors.Is` で分岐せず、`connect.NewError` を作らず、記録しない。応答への写しは `<元>To<先>` の変換の関数に置き、値を取り出して詰めるだけにする。
+handler の本文は、一つの usecase を呼び、エラーを `return nil, err` でそのまま返す。保存型はコマンドデータモデル、実装パターンは development-convention の `apply-layer-convention` の決定に従い、入口でイベント履歴の有無を決めない。`errors.Is` で分岐せず、`connect.NewError` を作らず、記録しない。応答への写しは `<元>To<先>` の変換の関数に置き、値を取り出して詰めるだけにする。
 
 巡回の相手が command なら、巡回が始めに時刻を一度だけ取り、query の usecase で候補を選び、一件ずつ command を呼び、ループと閉じ込めと記録を持つ。相手が手順なら、巡回は手順の `Execute` を一度呼ぶだけにする。受信境界は、メッセージを契約の型へ変換して手順を呼び、処理の表の「再処理で通りうるか」で受け取りを確定するか再処理させるかを決めて記録する。
 
