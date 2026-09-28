@@ -14,10 +14,12 @@ __pycache__/
 !/scripts/
 !/tests/
 !/decisions/
-!/evals/
 !/AGENTS.md
 !/LICENSE
 !/README.md
 !/SECURITY.md
 !/VALIDATION.md
 !/.gitignore
+
+# 評価の入力・成果物は各作業環境に保持する
+/evals/
