@@ -1,7 +1,7 @@
 {
   "name": "go-convention",
-  "version": "6.5.0",
-  "description": "Go 1.27 のドメイン、永続化、usecase、入口の層ごとの実装とテスト（TDD の一単位）と、言語、エラー、ログ、テストの共通の形、横断的関心事の契約の規約を配布する",
+  "version": "6.6.0",
+  "description": "Go 1.27 のドメイン、永続化、取得、usecase、入口の層ごとの実装とテスト（TDD の一単位）と、言語、エラー、ログ、テストの共通の形、横断的関心事の契約の規約を配布する",
   "author": {
     "name": "NaoyaNakamori"
   },
@@ -13,13 +13,14 @@
     "./skills/apply-go-test-convention",
     "./skills/develop-domain-model",
     "./skills/develop-repository",
+    "./skills/develop-query-service",
     "./skills/develop-usecase",
     "./skills/develop-handler"
   ],
   "interface": {
     "displayName": "Go Convention",
     "shortDescription": "Go の実装とテストを共通規約で書く",
-    "longDescription": "Go 1.27 を前提に、状態ごとに型を分けた集約と生成の時点で検証する値オブジェクト、sqlc と pgx の永続化、usecase、Connect-RPC の入口を、層ごとにテストを先に赤で置いてから実装する一つの skill で書き、言語、エラー、ログ、テストの共通の形、トランザクションや時計や ID ジェネレーターの契約を横断の規約として適用します。",
+    "longDescription": "Go 1.27 を前提に、状態ごとに型を分けた集約と生成の時点で検証する値オブジェクト、sqlc と pgx の永続化、取得、usecase、Connect-RPC の入口を、層ごとにテストを先に赤で置いてから実装する一つの skill で書き、言語、エラー、ログ、テストの共通の形、トランザクションや時計や ID ジェネレーターの契約を横断の規約として適用します。",
     "developerName": "NaoyaNakamori",
     "category": "Developer Tools",
     "capabilities": [

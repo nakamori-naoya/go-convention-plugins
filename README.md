@@ -89,7 +89,7 @@ marketplace の取得と、インストール済みパッケージの更新は�
 
 ## 配布する plugin
 
-- `go-convention`: 層ごとの4つの入口（`develop-domain-model`、`develop-repository`、`develop-usecase`、`develop-handler`）と、層をまたぐ5つの入口（`write-go-code`、`apply-crosscutting-contracts`、`handle-errors`、`write-logs`、`apply-go-test-convention`）
+- `go-convention`: 層ごとの5つの入口（`develop-domain-model`、`develop-repository`、`develop-query-service`、`develop-usecase`、`develop-handler`）と、層をまたぐ5つの入口（`write-go-code`、`apply-crosscutting-contracts`、`handle-errors`、`write-logs`、`apply-go-test-convention`）
 
 層の入口は、`development-convention` package の `develop-inside-out`（一つの場面の受け入れテストを先に赤で置き、内側の層から外側へゲートを通して進める）の各層を Go で書く一つの単位です。`develop-inside-out` が層の順序とゲートと赤を決め、層の入口がその層の中を「テスト → 赤 → 実装 → 緑 → 整える」で仕上げます。
 
