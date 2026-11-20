@@ -1,10 +1,10 @@
 # go-convention
 
-**Go 1.27 の実装とテストの規約を、層ごとの4つの skill と、層をまたぐ5つの skill から適用します。** package manifestが`skills/<name>/SKILL.md`を直接公開し、規約の基準資料は各skillの`SKILL.md`と`references/`です。
+**Go 1.27 の実装とテストの規約を、層ごとの5つの skill と、層をまたぐ5つの skill から適用します。** package manifestが`skills/<name>/SKILL.md`を直接公開し、規約の基準資料は各skillの`SKILL.md`と`references/`です。
 
 ## これは何か／何ではないか
 
-これは、Go でドメイン駆動設計の層（ドメインモデル・永続化・usecase・handler）と横断的関心事（エラー・ログ）とテストを、同じ前提で書くための規約です。前提は、状態ごとに型を分けた集約、生成の時点で検証する値オブジェクト、sqlc と pgx、Connect-RPC、実物を通す古典派のテスト、BDD 資料の ID をそのまま使うテストです。
+これは、Go でドメイン駆動設計の層（ドメインモデル・永続化・取得・usecase・handler）と横断的関心事（エラー・ログ）とテストを、同じ前提で書くための規約です。前提は、状態ごとに型を分けた集約、生成の時点で検証する値オブジェクト、sqlc と pgx、Connect-RPC、実物を通す古典派のテスト、BDD 資料の ID をそのまま使うテストです。
 
 これは、層とは何か・開発プロセス（内側から外へ、BDD 通過ゲート、ATDD）を決めるものではありません。確定済みの論理責務と集約境界を受け取り、Go 固有の package 配置へ写すところからを扱います。
 
@@ -15,7 +15,8 @@
 | 入口 | 何をするか |
 |---|---|
 | `develop-domain-model` | ドメインモデルの資料から、値オブジェクト、集約、イベント、永続化ポートとそのテストを書く |
-| `develop-repository` | 集約のリポジトリ、手順の口、Query の実装とその実 DB のテストを sqlc と pgx で書く |
+| `develop-repository` | 集約のリポジトリと手順の口と、その実 DB のテストを sqlc と pgx で書く |
+| `develop-query-service` | 読み取りのポートを満たす Query の実装（クエリサービス）と、取得結果を突き合わせる実 DB のテストを sqlc と pgx で書く |
 | `develop-usecase` | command、単純なパターンの手順、query の usecase と、配線と境界を確かめるテストを書く |
 | `develop-handler` | Connect-RPC の入口、interceptor、組み立てと、本番の組み立てを通す API のテストを書く |
 | `write-go-code` | 言語の規約（型で業務を運ぶ、丸めない、関数の形、interface、名前、コメント、package の木、ツール）で書く・直す |
