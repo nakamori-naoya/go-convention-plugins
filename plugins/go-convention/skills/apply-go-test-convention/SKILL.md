@@ -11,13 +11,13 @@ description: Go のテストを、層を問わない共通の形（対象一つ�
 
 対象（一つのメソッドか関数）一つにつき、テスト関数は一つにする。名前は `Test{型}_{メソッド}` か `Test{関数}` で、`_Error` のような接尾辞で二つ目を作らない。状態ごとに分けた型は別の型なので、それぞれにテスト関数を持つ。package は `{pkg}_test` にし、公開 API だけを叩く。テストのために実装を曲げない規律は development-convention の `write-readable-code` に従い、Go では `export_test.go` で内部を晒さない。ファイルスコープには `Test*`、`Benchmark*`、`const` だけを置き、helper 関数を作らない。
 
-表は無名 struct のスライスで、フィールドを識別（`id`、`name`、`description`）、Given、When、Then の順に並べ、実行と検証はループ本体に一回だけ書く。`t.Run(tt.id+" "+tt.name, ...)` にすると `go test -run 'TestX/BDD-001_'` で一つのケースを走らせられる。Given のフィールドは `description` の `Given:` の行と一対一にし、既定ではデータで書く。`setup func(t *testing.T) fixture` は、Given に `t` か直列化できない資源が要り、それがケースごとに違うときだけ置き、置いたら全ケースが持つ。When のフィールドは対象の引数名そのままにし、`in` や `args` の袋に包まない。Then は `want`、`want<何>`、`wantErr error` で、`wantErr` には対象が返す具体エラーを入れ、`require.ErrorIs` の後に `assert.Zero(t, got)` で結果がゼロ値であることも見る。`bool` や文言の一致で失敗を表さない。入力がそれまでの操作である型は、前提の操作 `given` と、操作と直後の期待の組 `steps` に分けて表にする。
+表は無名 struct のスライスで、フィールドを識別（`id`、`name`、`description`）、Given、When、Then の順に並べ、実行と検証はループ本体に一回だけ書く。`t.Run(tt.id+" "+tt.name, ...)` にすると `go test -run 'TestX/BDD-001_'` で一つのケースを走らせられる。Given のフィールドは `description` の `Given:` の行と一対一にし、既定ではデータで書く。`setup func(t *testing.T) fixture` は、Given に `t` か直列化できない資源が要り、それがケースごとに違うときだけ置き、置いたら全ケースが持つ。When のフィールドは対象の引数名そのままにし、`in` や `args` の袋に包まない。Then は `want`、`want<何>`、`wantErr error` で、`wantErr` には対象が返す具体エラーを入れ、`require.ErrorIs` の後に `assert.Zero(t, got)` で結果がゼロ値であることも見る。`bool` や文言の一致で失敗を表さない。入力がそれまでの操作である型は、一つのケースで確かめる操作を一つにし（資料の `When:` と一対一）、それまでに受け付けられた操作は `given` に、断られた操作は `refused` に置く。
 
 `require` は後の検証が無意味になるとき（`NoError`、`ErrorIs`）に、互いに独立した期待は `assert` に使う。ケースの間に依存を作らず、どの順でも一つだけでも通るようにする。`t.Parallel()` はテスト関数とサブテストの両方に書くか、どちらにも書かず、書かないならループの直前のコメントで共有する資源を名指しする。
 
 ## ケースの識別：資料の BDD は、主に担うテストだけが名乗る
 
-資料の BDD を写すケースは、資料の ID、見出し、gherkin を、字下げと `NOTE:` を含めて改変せずに `id`、`name`、`description` に写す。資料に無いケースは生成した id（`7c2e19`）を使い、資料風の番号を付けない。`id` と `name` は同じ package で一意にし、消した id を使い直さない。`description` は raw string で、`Given:`、`When:`、`Then:` を行頭にこの順で一回ずつ置き、`And:` は `Given:` か `Then:` の後にだけ置く。
+資料の BDD を写すケースは、資料の ID、見出し、gherkin を、字下げと `NOTE:` を含めて改変せずに `id`、`name`、`description` に写す。資料に無いケースは生成した id（`7c2e19`）を使い、資料風の番号を付けない。`id` と `name` は同じ package で一意にし、消した id を使い直さない。`description` は実際に改行した raw string で、`Given:`、`When:`、`Then:` を行頭にこの順で一回ずつ置き（二重引用符の `\n` で行を分けたり、一行に並べたりしない）、`And:` は `Given:` か `Then:` の後にだけ置く。
 
 資料の一つの BDD を `id` に写すのは、repository 全体で、その BDD の `Then:` を最も内側で観測できるテストのちょうど一つだけである。どの層が主に担うかは各層の develop-* が書いている。同じ場面を別の層のテストが通るなら、そのケースは生成した id を使う。資料の ID を写すファイルには、`// BDD の資料: <repository 相対の path>` を一つだけ書く。どの層のテストも担わない BDD だけを、最も担いそうな層のテストファイルの末尾に `// どのテストも担わない BDD:` に続けて、ID と理由を一行ずつ並べる。
 
